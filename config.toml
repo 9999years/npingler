@@ -1,0 +1,7 @@
+# log.filters = [ "debug" ]
+# file = "~/.config/npingler/default.nix"
+# profile.file = "~/.local/state/nix/profiles/profile"
+# profile.extra_switch_args = []
+# registry.pin = false
+# registry.pin_root = false
+# channels.pin = false

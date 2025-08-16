@@ -20,7 +20,7 @@
 
     meta = {
       description = "Nix profile and home directory manager";
-      homepage = "https://github.com/home-mangler/home-mangler";
+      homepage = "https://github.com/npingler/npingler";
       license = lib.licenses.mit;
       maintainers = [ lib.maintainers._9999years ];
     };
@@ -37,22 +37,22 @@
     };
 
   checks = {
-    home-mangler-tests = craneLib.cargoNextest (commonArgs
+    npingler-tests = craneLib.cargoNextest (commonArgs
       // {
         NEXTEST_HIDE_PROGRESS_BAR = "true";
         NEXTEST_NO_TESTS = "warn";
       });
-    home-mangler-clippy = craneLib.cargoClippy (commonArgs
+    npingler-clippy = craneLib.cargoClippy (commonArgs
       // {
         cargoClippyExtraArgs = "--all-targets -- --deny warnings";
       });
-    home-mangler-doc = craneLib.cargoDoc (commonArgs
+    npingler-doc = craneLib.cargoDoc (commonArgs
       // {
         cargoDocExtraArgs = "--document-private-items";
         RUSTDOCFLAGS = "-D warnings";
       });
-    home-mangler-fmt = craneLib.cargoFmt commonArgs;
-    home-mangler-audit = craneLib.cargoAudit (commonArgs
+    npingler-fmt = craneLib.cargoFmt commonArgs;
+    npingler-audit = craneLib.cargoAudit (commonArgs
       // {
         inherit advisory-db;
       });
@@ -75,11 +75,11 @@ in
   craneLib.buildPackage (commonArgs
     // {
       # Don't run tests; we'll do that in a separate derivation.
-      # This will allow people to install and depend on `home-mangler`
+      # This will allow people to install and depend on `npingler`
       # without downloading a half dozen different versions of GHC.
       doCheck = false;
 
-      # Only build `home-mangler`, not the test macros.
+      # Only build `npingler`, not the test macros.
       cargoBuildCommand = "cargoWithProfile build";
 
       passthru = {
