@@ -1,6 +1,6 @@
 [package]
 name = "npingler"
-description = "A Nix profile and home directory manager"
+description = "A Nix profile manager for use with npins"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
