@@ -1,67 +1,82 @@
+use std::collections::BTreeSet;
+use std::os::unix::process::CommandExt as _;
 use std::process::Command;
+use std::process::Output;
+use std::process::Stdio;
 
-mod profile_list;
 use camino::Utf8PathBuf;
-use miette::Context;
+use command_error::CommandExt;
+use command_error::OutputContext;
 use miette::IntoDiagnostic;
-pub use profile_list::ProfileList;
-
-mod flake_metadata;
-pub use flake_metadata::ResolvedFlake;
-use tap::TryConv;
-
-mod build;
-mod flake_update;
+use serde::de::DeserializeOwned;
+use tracing::instrument;
 
 #[derive(Debug, Clone)]
 pub struct Nix {
     /// Path to the `nix` binary.
-    program: Utf8PathBuf,
-    /// Path to the current profile.
-    profile: Option<Utf8PathBuf>,
+    nix_program: Utf8PathBuf,
+    /// Path to the `nix-env` binary.
+    nix_env_program: Utf8PathBuf,
 }
 
 impl Nix {
     pub fn new() -> miette::Result<Self> {
-        let mut program = which::which_global("nix")
-            .into_diagnostic()
-            .wrap_err("Could not find `nix` executable")?
-            .try_conv::<Utf8PathBuf>()
-            .into_diagnostic()?;
-        if program.is_symlink() {
-            tracing::debug!(path = %program, "`nix` is symlink");
-            program = program
-                .read_link_utf8()
-                .into_diagnostic()
-                .wrap_err_with(|| format!("Failed to read `nix` symlink: {program:?}"))?;
-        }
-        tracing::debug!(path = %program, "Found `nix`");
+        let nix_program = crate::which::which_global("nix")?;
+        let nix_env_program = crate::which::which_global("nix-env")?;
         Ok(Self {
-            program,
-            profile: None,
+            nix_program,
+            nix_env_program,
         })
     }
 
-    pub fn with_profile(mut self, profile: Option<Utf8PathBuf>) -> Self {
-        self.profile = profile;
-        self
+    pub fn nix_command(&self) -> Command {
+        let mut command = Command::new(&self.nix_program);
+        command.arg("--extra-experimental-features");
+        command.arg("nix-command");
+        command
     }
 
-    pub fn command(&self, subcommand: &[&str]) -> Command {
-        // TODO: Should run in `sh` after sourcing the Nix profile.
-        let mut command = Command::new(&self.program);
-        command.args(["--extra-experimental-features", "nix-command flakes"]);
-        command.args(subcommand);
-        #[allow(clippy::single_match)]
-        match subcommand {
-            ["profile", _] => {
-                if let Some(profile) = &self.profile {
-                    command.args(["--profile", profile.as_str()]);
-                }
-            }
-            _ => {}
-        }
+    pub fn nix_env_command(&self) -> Command {
+        let mut command = Command::new(&self.nix_env_program);
+        command.arg0("nix-env");
+        command
+    }
+
+    /// Build something and return the out paths.
+    #[instrument(level = "debug", skip(self))]
+    pub fn build(&self, args: &[&str]) -> miette::Result<BTreeSet<Utf8PathBuf>> {
+        let stdout = self
+            .nix_command()
+            .args([
+                "build",
+                "--print-build-logs",
+                "--no-link",
+                "--print-out-paths",
+            ])
+            .args(args)
+            .stderr(Stdio::inherit())
+            .output_checked_utf8()
+            .into_diagnostic()?
+            .stdout;
+
+        Ok(stdout.lines().map(Utf8PathBuf::from).collect())
+    }
+
+    #[instrument(level = "debug", skip(self))]
+    pub fn eval<T>(&self, args: &[&str]) -> miette::Result<T>
+    where
+        T: DeserializeOwned,
+    {
+        let mut command = self.nix_command();
+        command.arg("eval");
+        command.arg("--json");
+        command.args(args);
 
         command
+            .output_checked_as(|context: OutputContext<Output>| {
+                serde_json::from_slice(&context.output().stdout)
+                    .map_err(|err| context.error_msg(err))
+            })
+            .into_diagnostic()
     }
 }

@@ -40,19 +40,19 @@
     in
       (lib.filterAttrs (name: value: lib.isDerivation value) packages)
       // {
-        default = packages.home-mangler;
+        default = packages.npingler;
       });
 
-    checks = eachSystem (system: self.packages.${system}.home-mangler.checks);
+    checks = eachSystem (system: self.packages.${system}.npingler.checks);
 
     devShells = eachSystem (system: {
-      default = self.packages.${system}.home-mangler.devShell;
+      default = self.packages.${system}.npingler.devShell;
     });
 
     overlays.default = final: prev: let
       packages = final.callPackage ./nix/makePackages.nix {inherit inputs;};
     in {
-      inherit (packages) home-mangler;
+      inherit (packages) npingler;
     };
   };
 }

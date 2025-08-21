@@ -1,48 +1,51 @@
-# home-mangler
+# npingler
 
-`home-mangler` is a Nix Flakes home directory management tool.
+`npingler` is a Nix profile manager intended for use with [`npins`][npins]. A
+non-trivial implementation of @lf-'s [`flakey-profile`][flakey-profile], split
+off of my earlier (Flake-based) [`home-mangler`][home-mangler].
 
-`home-mangler` is configured with a Nix Flake in `~/.config/home-mangler/flake.nix`:
+`npingler` is configured with a Nix expression in `~/.config/npingler/default.nix`:
 
 ```nix
-{
-  inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs";
-    home-mangler.url = "github:home-mangler/home-mangler";
-  };
+let
+  npins-sources = import ./npins;
+  pkgs = import npins-sources.nixpkgs {
+    overlays = [
+      (final: prev: {
+        inherit npins-sources;
 
-  outputs = {
-    self,
-    nixpkgs,
-    home-mangler,
-  }: {
-    home-mangler = {
-      your-hostname = let
-        pkgs = nixpkgs.legacyPackages.aarch64-darwin;
-        home-mangler-lib = home-mangler.lib.aarch64-darwin;
-      in
-        home-mangler-lib.makeConfiguration {
-          packages = [
-            pkgs.broot
-          ];
-        };
+        npingler-lib = final.callPackage "${npins-sources.npingler}/lib" { };
+      })
+    ];
+  };
+in
+{
+  npingler = {
+    # By default, npingler uses the attr matching your hostname.
+    grandiflora = pkgs.npingler-lib.makeProfile {
+      pins = {
+        # A map of names to `source` derivations. These get pinned in the `nix
+        # registry` so that (e.g.) `nix repl nixpkgs` uses the same version of
+        # `nixpkgs` as your profile, and also in your Nix channels, so that
+        # `nix-shell -p hello` uses the same version as well.
+        nixpkgs = npins-sources.nixpkgs;
+      };
+
+      # Install `git` in your profile:
+      paths = [
+        pkgs.git
+      ];
     };
   };
 }
 ```
 
-## Features
+Switch to the new configuration with `npingler switch`. Use `--dry-run` for a preview.
 
-- `home-mangler` can manage your Nix profile by keeping a set of packages
-  installed:
+Note that with [`flake-compat`][flake-compat], you can use `npingler` with a
+Flake-based setup (although the `npingler update` command won't do anything).
 
-      Installing new packages
-      Updated `nix profile`:
-      - /nix/store/vwdgac9hifbssmw8hfkvm777pmc04pwh-home-mangler-packages
-      + /nix/store/l1br3isl9pnhgg4rsazmrn436rhxiyd9-home-mangler-packages
-
-## Roadmap
-
-- [#5: Overlay files from a derivation into your home directory.](https://github.com/home-mangler/home-mangler/issues/5)
-- [#6: Run a script or scripts in your home directory.](https://github.com/home-mangler/home-mangler/issues/6)
-- [#8: Compatibility with home-manager modules.](https://github.com/home-mangler/home-mangler/issues/8)
+[npins]: https://github.com/andir/npins
+[flakey-profile]: https://github.com/lf-/flakey-profile
+[home-mangler]: https://github.com/home-mangler/home-mangler
+[flake-compat]: https://git.lix.systems/lix-project/flake-compat
