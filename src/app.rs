@@ -58,9 +58,13 @@ impl App {
         command
     }
 
+    fn npingler_attr(&self, attr: &str) -> String {
+        format!("npingler.{}.{}", self.hostname, attr)
+    }
+
     #[instrument(level = "debug", skip(self))]
     fn build_npingler_attr(&self, attr: &str) -> miette::Result<Utf8PathBuf> {
-        let attr = format!("npingler.{}.{}", self.hostname, attr);
+        let attr = self.npingler_attr(attr);
         let out_paths = self.nix.build(&["--file", self.nix_file.as_str(), &attr])?;
         if out_paths.is_empty() {
             Err(miette!(
@@ -84,12 +88,15 @@ impl App {
     where
         T: DeserializeOwned,
     {
+        let attr = self.npingler_attr(attr);
         let mut args = vec!["--file", &self.nix_file.as_str()];
 
         if let Some(expr) = apply {
             args.push("--apply");
             args.push(expr);
         }
+
+        args.push(&attr);
 
         self.nix.eval(&args)
     }
