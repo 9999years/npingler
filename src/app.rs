@@ -58,6 +58,17 @@ impl App {
         command
     }
 
+    #[instrument(level = "debug", skip(self))]
+    fn sudo_nix_env_command(&self, profile: Option<Utf8PathBuf>) -> Command {
+        let mut command = self.nix.sudo_nix_env_command();
+        // TODO: Duplication with `nix_env_command`.
+        if let Some(profile) = profile {
+            command.arg("--profile");
+            command.arg(profile.as_str());
+        }
+        command
+    }
+
     fn npingler_attr(&self, attr: &str) -> String {
         format!("npingler.{}.{}", self.hostname, attr)
     }
@@ -181,19 +192,20 @@ impl App {
         Ok(())
     }
 
-    fn pin_flake(
-        &self,
-        name: &str,
-        path: &Utf8Path,
-        registry: Option<&Utf8Path>,
-    ) -> miette::Result<()> {
+    fn pin_flake_root(&self, name: &str, path: &Utf8Path) -> miette::Result<()> {
         tracing::info!("Pinning {name} -> {path}");
-        let mut command = self.nix.nix_command();
-        command.args(["registry", "pin"]);
-        if let Some(registry) = registry {
-            command.args(["--registry", registry.as_str()]);
-        }
-        command.args(["--override-flake", name, path.as_str(), name]);
+        let registry = self.config.root_registry_path()?;
+        let mut command = self.nix.sudo_nix_command();
+        command.args([
+            "registry",
+            "pin",
+            "--registry",
+            registry.as_str(),
+            "--override-flake",
+            name,
+            path.as_str(),
+            name,
+        ]);
 
         match self.config.run_mode() {
             crate::config::RunMode::Dry => {
@@ -201,13 +213,7 @@ impl App {
             }
             crate::config::RunMode::Wet => {
                 command.status_checked().wrap_err_with(|| {
-                    format!(
-                        "Failed to pin `nix registry` entry {name} to {path}{}",
-                        match registry {
-                            Some(registry) => format!(" in registry {registry}"),
-                            None => "".into(),
-                        }
-                    )
+                    format!("Failed to pin `nix registry` entry {name} to {path}")
                 })?;
             }
         }
@@ -216,37 +222,30 @@ impl App {
 
     #[instrument(level = "debug", skip(self))]
     pub fn ensure_channels(&self) -> miette::Result<()> {
-        if !self.config.channels_pin() {
+        if !self.config.channels_pin_root() {
             tracing::debug!("Skipping pinning channels");
             return Ok(());
         }
 
-        match self.nix_profile.as_deref() {
-            Some(profile) => {
-                // TODO: Is this correct?
-                let profile = profile.join("../channels");
-                let mut command = self.nix_env_command(Some(profile));
-                command.arg("--set");
+        let profile = self.config.channels_root_profile()?;
 
-                tracing::info!("Building channels");
-                let channels = self.build_npingler_attr("pins.channels")?;
-                command.arg(&channels);
+        let mut command = self.sudo_nix_env_command(Some(profile));
+        command.arg("--set");
 
-                tracing::info!(%channels, "Pinning channels");
+        tracing::info!("Building channels");
+        let channels = self.build_npingler_attr("pins.channels")?;
+        command.arg(&channels);
 
-                match self.config.run_mode() {
-                    crate::config::RunMode::Dry => {
-                        tracing::info!("Would run: {}", Utf8ProgramAndArgs::from(&command));
-                    }
-                    crate::config::RunMode::Wet => {
-                        command
-                            .status_checked()
-                            .wrap_err("Failed to pin channels")?;
-                    }
-                }
+        tracing::info!(%channels, "Pinning channels");
+
+        match self.config.run_mode() {
+            crate::config::RunMode::Dry => {
+                tracing::info!("Would run: {}", Utf8ProgramAndArgs::from(&command));
             }
-            None => {
-                tracing::warn!("No Nix profile was detected or supplied, so I'm not able to pin your Nix channels. Try running `npingler` again.");
+            crate::config::RunMode::Wet => {
+                command
+                    .status_checked()
+                    .wrap_err("Failed to pin channels")?;
             }
         }
 
@@ -255,26 +254,16 @@ impl App {
 
     #[instrument(level = "debug", skip(self))]
     pub fn ensure_registry(&self) -> miette::Result<()> {
-        if !(self.config.registry_pin() || self.config.registry_pin_root()) {
+        if !self.config.registry_pin_root() {
             tracing::debug!("Skipping pinning registry entries");
             return Ok(());
         }
 
         let pins: NixPins = self.eval_npingler_attr("pins.pins", None)?;
 
-        if self.config.registry_pin() {
-            tracing::info!("Pinning Nix Flake registry entries");
-            for (name, path) in &pins.entries {
-                self.pin_flake(name, path, None)?;
-            }
-        }
-
-        if self.config.registry_pin_root() {
-            tracing::info!("Pinning `root` Nix Flake registry entries");
-            let root_registry = Utf8Path::new("/etc/nix/registry.json");
-            for (name, path) in &pins.entries {
-                self.pin_flake(name, path, Some(root_registry))?;
-            }
+        tracing::info!("Pinning `root` Nix Flake registry entries");
+        for (name, path) in &pins.entries {
+            self.pin_flake_root(name, path)?;
         }
 
         Ok(())
