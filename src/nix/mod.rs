@@ -10,6 +10,7 @@ use command_error::OutputContext;
 use miette::IntoDiagnostic;
 use serde::de::DeserializeOwned;
 use tracing::instrument;
+use utf8_command::Utf8Output;
 
 #[derive(Debug, Clone)]
 pub struct Nix {
@@ -92,6 +93,27 @@ impl Nix {
             .output_checked_as(|context: OutputContext<Output>| {
                 serde_json::from_slice(&context.output().stdout)
                     .map_err(|err| context.error_msg(err))
+            })
+            .into_diagnostic()
+    }
+
+    /// Get a configuration setting by name.
+    pub fn get_config(&self, setting: &str) -> miette::Result<Option<String>> {
+        let mut command = self.nix_command();
+        command.arg("config");
+        command.arg("show");
+        command.arg("--");
+        command.arg(setting);
+
+        command
+            .output_checked_as(|context: OutputContext<Utf8Output>| {
+                if context.output().status.success() {
+                    Ok(Some(context.output().stdout.trim().to_owned()))
+                } else if context.output().stderr.contains("could not find setting") {
+                    Ok(None)
+                } else {
+                    Err(context.error())
+                }
             })
             .into_diagnostic()
     }
