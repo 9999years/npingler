@@ -32,7 +32,7 @@ impl App {
         let nix = config.nix()?;
         let nix_file = config.nix_file()?;
         // TODO: Should we create this profile if it doesn't exist?
-        let nix_profile = config.nix_profile()?;
+        let nix_profile = config.nix_profile(&nix)?;
         let hostname = config.hostname()?;
         ::tracing::debug!(%nix_file, ?nix_profile, %hostname, "Resolved configuration");
         Ok(Self {

@@ -6,6 +6,8 @@ use miette::IntoDiagnostic;
 use tap::Tap;
 use xdg::BaseDirectories;
 
+use crate::nix::Nix;
+
 pub struct ProjectPaths {
     /// The user's home directory.
     home_dir: Utf8PathBuf,
@@ -85,12 +87,14 @@ impl ProjectPaths {
     }
 
     /// Get the path to the user's Nix profile, if it exists.
-    pub fn nix_profile(&self) -> miette::Result<Option<Utf8PathBuf>> {
-        if let Some(state_home) = self.xdg.get_state_home() {
-            let state_home = Utf8PathBuf::try_from(state_home).into_diagnostic()?;
-            let nix_profile_home = state_home.join("nix/profiles/profile");
-            if nix_profile_home.symlink_metadata().is_ok() {
-                return Ok(Some(nix_profile_home));
+    pub fn nix_profile(&self, nix: &Nix) -> miette::Result<Option<Utf8PathBuf>> {
+        // TODO: I'm not sure this function is correct; compare against upstream.
+        //
+        // See: https://git.lix.systems/lix-project/lix/src/commit/5dc847b47b4e0e970d6a1cf2da0abd7a4e1bad2e/lix/libstore/profiles.cc#L331-L349
+
+        if nix.get_config("use-xdg-base-directories")?.as_deref() == Some("true") {
+            if let Some(profile) = self.xdg_nix_profile()? {
+                return Ok(Some(profile));
             }
         }
 
@@ -122,6 +126,26 @@ impl ProjectPaths {
             return Ok(Some(user_profile));
         }
 
+        if let Some(profile) = self.xdg_nix_profile()? {
+            return Ok(Some(profile));
+        }
+
+        Ok(None)
+    }
+
+    /// Get the new `use-xdg-base-directories` Nix profile path,
+    /// `~/.local/state/nix/profiles/profile`. I had stuff in here on my machine even though I
+    /// hadn't set `use-xdg-base-directories`, so I think some stuff writes here regardless of what
+    /// you put in that setting? Therefore we try it twice, at high priority if you have that
+    /// setting enabled, and at low priority if we can't find other profiles.
+    fn xdg_nix_profile(&self) -> miette::Result<Option<Utf8PathBuf>> {
+        if let Some(state_home) = self.xdg.get_state_home() {
+            let state_home = Utf8PathBuf::try_from(state_home).into_diagnostic()?;
+            let nix_profile_home = state_home.join("nix/profile");
+            if nix_profile_home.symlink_metadata().is_ok() {
+                return Ok(Some(nix_profile_home));
+            }
+        }
         Ok(None)
     }
 
