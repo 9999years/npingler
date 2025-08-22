@@ -36,9 +36,25 @@ impl Nix {
         command
     }
 
+    pub fn sudo_nix_command(&self) -> Command {
+        let mut command = Command::new("sudo");
+        let inner = self.nix_command();
+        command.arg(inner.get_program());
+        command.args(inner.get_args());
+        command
+    }
+
     pub fn nix_env_command(&self) -> Command {
         let mut command = Command::new(&self.nix_env_program);
         command.arg0("nix-env");
+        command
+    }
+
+    pub fn sudo_nix_env_command(&self) -> Command {
+        let mut command = Command::new("sudo");
+        let inner = self.nix_env_command();
+        command.arg(inner.get_program());
+        command.args(inner.get_args());
         command
     }
 

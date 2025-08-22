@@ -86,21 +86,25 @@ pub struct SwitchArgs {
 #[derive(Debug, Default, Clone, clap::Args)]
 #[clap(next_help_heading = "Nix registry options")]
 pub struct RegistryArgs {
-    /// Pin Nix registry entries.
-    #[arg(long)]
-    pub pin_registry: Option<bool>,
-
-    /// Pin Nix registry entries for the `root` user.
+    /// Pin Nix Flake registry entries for the `root` user.
     #[arg(long)]
     pub pin_registry_root: Option<bool>,
+
+    /// The Nix Flake registry path for the `root` user, defaults to `/etc/nix/registry.json`.
+    #[arg(long, env = "ROOT_NIX_REGISTRY")]
+    pub root_registry_path: Option<Utf8PathBuf>,
 }
 
 #[derive(Debug, Default, Clone, clap::Args)]
 #[clap(next_help_heading = "Nix channel options")]
 pub struct ChannelArgs {
-    /// Pin Nix channels.
+    /// Pin Nix channels for the `root` user.
     #[arg(long)]
-    pub pin_channels: Option<bool>,
+    pub pin_channels_root: Option<bool>,
+
+    /// The root user's Nix profile path. Defaults to `/nix/var/nix/profiles/per-user/root/channels`.
+    #[arg(long, env = "ROOT_NIX_PROFILE")]
+    pub root_profile: Option<Utf8PathBuf>,
 }
 
 #[derive(Debug, Default, Clone, clap::Args)]

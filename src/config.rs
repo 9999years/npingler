@@ -27,13 +27,14 @@ pub struct Log {
 
 #[derive(serde::Deserialize, Default)]
 pub struct Registry {
-    pin: Option<bool>,
     pin_root: Option<bool>,
+    root_path: Option<String>,
 }
 
 #[derive(serde::Deserialize, Default)]
 pub struct Channels {
-    pin: Option<bool>,
+    pin_root: Option<bool>,
+    root_profile: Option<String>,
 }
 
 #[derive(serde::Deserialize, Default)]
@@ -238,28 +239,40 @@ impl Config {
         Nix::new()
     }
 
-    pub fn channels_pin(&self) -> bool {
-        if let Some(pin) = self.switch_args.channel.pin_channels {
+    pub fn channels_pin_root(&self) -> bool {
+        if let Some(pin) = self.switch_args.channel.pin_channels_root {
             return pin;
         }
 
-        if let Some(pin) = self.file.channels.pin {
+        if let Some(pin) = self.file.channels.pin_root {
             return pin;
         }
 
         false
     }
 
-    pub fn registry_pin(&self) -> bool {
-        if let Some(pin) = self.switch_args.registry.pin_registry {
-            return pin;
+    pub fn channels_root_profile(&self) -> miette::Result<Utf8PathBuf> {
+        if let Some(profile) = &self.switch_args.channel.root_profile {
+            return Ok(profile.clone());
         }
 
-        if let Some(pin) = self.file.registry.pin {
-            return pin;
+        if let Some(profile) = &self.file.channels.root_profile {
+            return self.project_paths.expand_tilde(profile);
         }
 
-        false
+        Ok(Utf8Path::new("/nix/var/nix/profiles/per-user/root/channels").to_owned())
+    }
+
+    pub fn root_registry_path(&self) -> miette::Result<Utf8PathBuf> {
+        if let Some(profile) = &self.switch_args.registry.root_registry_path {
+            return Ok(profile.clone());
+        }
+
+        if let Some(profile) = &self.file.registry.root_path {
+            return self.project_paths.expand_tilde(profile);
+        }
+
+        Ok(Utf8Path::new("/etc/nix/registry.json").to_owned())
     }
 
     pub fn registry_pin_root(&self) -> bool {
