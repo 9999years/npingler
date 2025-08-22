@@ -90,7 +90,9 @@ impl App {
             ))
         } else {
             // This doesn't feel great.
-            Ok(out_paths.into_iter().next().unwrap())
+            let out_path = out_paths.into_iter().next().unwrap();
+            tracing::debug!(%attr, %out_path, "Built attr");
+            Ok(out_path)
         }
     }
 
