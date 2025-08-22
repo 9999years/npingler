@@ -5,8 +5,8 @@ use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use command_error::CommandExt;
 use command_error::Utf8ProgramAndArgs;
-use miette::miette;
 use miette::Context;
+use miette::miette;
 use serde::de::DeserializeOwned;
 use tracing::instrument;
 
@@ -16,6 +16,7 @@ use crate::diff_trees::diff_trees;
 use crate::format_bulleted_list;
 use crate::fs::resolve_symlink_utf8;
 use crate::nix::Nix;
+use crate::nix::Registry;
 use crate::pins::NixPins;
 
 pub struct App {
@@ -192,8 +193,34 @@ impl App {
         Ok(())
     }
 
-    fn pin_flake_root(&self, name: &str, path: &Utf8Path) -> miette::Result<()> {
-        tracing::info!("Pinning {name} -> {path}");
+    fn pin_flake_root(
+        &self,
+        name: &str,
+        path: &Utf8Path,
+        registry: &Option<Registry>,
+    ) -> miette::Result<()> {
+        let current_path = match registry {
+            Some(registry) => match registry.id_to_path(name) {
+                Some(current_path) => Some(current_path),
+                None => None,
+            },
+            None => None,
+        };
+
+        match current_path {
+            Some(current_path) => {
+                if current_path == path {
+                    tracing::info!("Registry entry {name} is already set to {path}");
+                    return Ok(());
+                } else {
+                    tracing::info!("Updating registry entry {name}:\n- {current_path}\n+ {path}");
+                }
+            }
+            None => {
+                tracing::info!("Pinning registry entry {name} to {path}");
+            }
+        }
+
         let registry = self.config.root_registry_path()?;
         let mut command = self.nix.sudo_nix_command();
         command.args([
@@ -227,16 +254,22 @@ impl App {
             return Ok(());
         }
 
+        tracing::info!("Pinning channels");
+
         let profile = self.config.channels_root_profile()?;
+        let channels = self.build_npingler_attr("pins.channels")?;
+        let current_channels = crate::fs::resolve_symlink_utf8(profile.clone())?;
+
+        if current_channels == channels {
+            tracing::info!("Channels are already set to {channels}");
+            return Ok(());
+        } else {
+            tracing::info!("Updating channels:\n- {current_channels}\n+ {channels}");
+        }
 
         let mut command = self.sudo_nix_env_command(Some(profile));
         command.arg("--set");
-
-        tracing::info!("Building channels");
-        let channels = self.build_npingler_attr("pins.channels")?;
         command.arg(&channels);
-
-        tracing::info!(%channels, "Pinning channels");
 
         match self.config.run_mode() {
             crate::config::RunMode::Dry => {
@@ -261,9 +294,17 @@ impl App {
 
         let pins: NixPins = self.eval_npingler_attr("pins.pins", None)?;
 
+        let registry = match self.nix.parse_registry(Nix::system_registry_path()) {
+            Ok(registry) => Some(registry),
+            Err(error) => {
+                tracing::warn!("{error:?}");
+                None
+            }
+        };
+
         tracing::info!("Pinning `root` Nix Flake registry entries");
         for (name, path) in &pins.entries {
-            self.pin_flake_root(name, path)?;
+            self.pin_flake_root(name, path, &registry)?;
         }
 
         Ok(())

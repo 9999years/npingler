@@ -4,13 +4,18 @@ use std::process::Command;
 use std::process::Output;
 use std::process::Stdio;
 
+use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use command_error::CommandExt;
 use command_error::OutputContext;
+use miette::Context;
 use miette::IntoDiagnostic;
 use serde::de::DeserializeOwned;
 use tracing::instrument;
 use utf8_command::Utf8Output;
+
+mod registry;
+pub use registry::Registry;
 
 #[derive(Debug, Clone)]
 pub struct Nix {
@@ -116,5 +121,19 @@ impl Nix {
                 }
             })
             .into_diagnostic()
+    }
+
+    pub fn system_registry_path() -> &'static Utf8Path {
+        Utf8Path::new("/etc/nix/registry.json")
+    }
+
+    pub fn parse_registry(&self, path: &Utf8Path) -> miette::Result<Registry> {
+        let contents = fs_err::read_to_string(path)
+            .into_diagnostic()
+            .wrap_err("Failed to read Flake registry")?;
+
+        serde_json::from_str(&contents)
+            .into_diagnostic()
+            .wrap_err("Failed to deserialize Flake registry")
     }
 }
