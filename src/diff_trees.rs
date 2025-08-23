@@ -9,7 +9,6 @@ use camino::Utf8PathBuf;
 use miette::Context;
 use miette::IntoDiagnostic;
 use owo_colors::OwoColorize;
-use owo_colors::Stream;
 use tap::TryConv;
 use walkdir::WalkDir;
 
@@ -48,20 +47,12 @@ fn display_path_updates(
 ) -> String {
     let mut ret = String::new();
     for path in removed_paths {
-        ret.push_str(
-            &format!("- {path}")
-                .if_supports_color(Stream::Stdout, |text| text.red())
-                .to_string(),
-        );
+        ret.push_str(&format!("- {path}").red().to_string());
         ret.push('\n');
     }
 
     for path in added_paths {
-        ret.push_str(
-            &format!("+ {path}")
-                .if_supports_color(Stream::Stdout, |text| text.green())
-                .to_string(),
-        );
+        ret.push_str(&format!("+ {path}").green().to_string());
         ret.push('\n');
     }
 
@@ -77,21 +68,13 @@ fn display_diff(diff: &Diff) -> String {
             DiffKind::Same => {}
             DiffKind::Added => {
                 let path = entry.format_path(path);
-                ret.push_str(
-                    &format!("+ {path}")
-                        .if_supports_color(Stream::Stdout, |text| text.green())
-                        .to_string(),
-                );
+                ret.push_str(&format!("+ {path}").green().to_string());
                 ret.push('\n');
                 changed_entries += 1;
             }
             DiffKind::Removed => {
                 let path = entry.format_path(path);
-                ret.push_str(
-                    &format!("- {path}")
-                        .if_supports_color(Stream::Stdout, |text| text.red())
-                        .to_string(),
-                );
+                ret.push_str(&format!("- {path}").red().to_string());
                 ret.push('\n');
                 changed_entries += 1;
             }
@@ -101,11 +84,7 @@ fn display_diff(diff: &Diff) -> String {
                 }
 
                 let path = entry.format_path(path);
-                ret.push_str(
-                    &format!("~ {path}")
-                        .if_supports_color(Stream::Stdout, |text| text.yellow())
-                        .to_string(),
-                );
+                ret.push_str(&format!("~ {path}").yellow().to_string());
                 ret.push('\n');
                 changed_entries += 1;
             }

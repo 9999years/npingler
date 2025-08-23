@@ -18,7 +18,7 @@ use utf8_command::Utf8Output;
 mod registry;
 pub use registry::Registry;
 
-mod derivation;
+pub mod derivation;
 pub use derivation::Derivation;
 pub use derivation::Derivations;
 
