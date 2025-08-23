@@ -160,10 +160,6 @@ impl Args {
             ret.push_str(",debug");
         }
 
-        if ret.is_empty() {
-            None
-        } else {
-            Some(ret)
-        }
+        if ret.is_empty() { None } else { Some(ret) }
     }
 }

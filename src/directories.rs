@@ -1,8 +1,8 @@
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use miette::miette;
 use miette::Context;
 use miette::IntoDiagnostic;
+use miette::miette;
 use tap::Tap;
 use xdg::BaseDirectories;
 

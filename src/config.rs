@@ -1,8 +1,8 @@
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use miette::miette;
 use miette::Context;
 use miette::IntoDiagnostic;
+use miette::miette;
 
 use crate::cli::Args;
 use crate::cli::SwitchArgs;
@@ -159,7 +159,9 @@ impl Config {
                     return Ok(path);
                 }
                 None => {
-                    return Err(miette!("`--file` does not exist or (if it's a directory) contain a `default.nix`: {file}"));
+                    return Err(miette!(
+                        "`--file` does not exist or (if it's a directory) contain a `default.nix`: {file}"
+                    ));
                 }
             }
         }
@@ -170,7 +172,9 @@ impl Config {
                     return Ok(path);
                 }
                 None => {
-                    return Err(miette!("`file` setting in config does not exist or (if it's a directory) contain a `default.nix`: {file}"));
+                    return Err(miette!(
+                        "`file` setting in config does not exist or (if it's a directory) contain a `default.nix`: {file}"
+                    ));
                 }
             }
         }
