@@ -49,6 +49,8 @@ pub enum Command {
         switch_args: SwitchArgs,
     },
 
+    // TODO: Build-but-don't-switch command
+
     // TODO: `pin-channels` and `pin-registry` commands would be nice, but the defaults (not
     // pinning channels or the registry) make the behavior very unintuitive.
     /// Commands to initialize the `npingler` configuration file.
