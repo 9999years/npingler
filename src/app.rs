@@ -153,14 +153,14 @@ impl App {
     #[instrument(level = "debug", skip(self))]
     pub fn ensure_packages(&self) -> miette::Result<()> {
         tracing::info!("Building profile packages");
-        let package_out_path = self.build_npingler_attr("packages")?;
+        let new_profile = self.build_npingler_attr("packages")?;
 
         let old_profile = self.get_profile_store_path()?;
         tracing::debug!(?old_profile, "Resolved Nix profile");
 
-        tracing::info!("Setting profile to {package_out_path}");
+        tracing::info!("Setting profile to {new_profile}");
         let mut command = self.nix_env_command(self.nix_profile.clone());
-        command.args(["--set", package_out_path.as_str()]);
+        command.args(["--set", new_profile.as_str()]);
         command.args(self.config.profile_extra_switch_args()?);
 
         match self.config.run_mode() {
