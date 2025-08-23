@@ -10,12 +10,17 @@ use command_error::CommandExt;
 use command_error::OutputContext;
 use miette::Context;
 use miette::IntoDiagnostic;
+use miette::miette;
 use serde::de::DeserializeOwned;
 use tracing::instrument;
 use utf8_command::Utf8Output;
 
 mod registry;
 pub use registry::Registry;
+
+mod derivation;
+pub use derivation::Derivation;
+pub use derivation::Derivations;
 
 #[derive(Debug, Clone)]
 pub struct Nix {
@@ -135,5 +140,29 @@ impl Nix {
         serde_json::from_str(&contents)
             .into_diagnostic()
             .wrap_err("Failed to deserialize Flake registry")
+    }
+
+    // `nix derivation show` wrapper.
+    pub fn derivation_infos<'p>(
+        &self,
+        paths: impl IntoIterator<Item = &'p Utf8Path>,
+    ) -> miette::Result<Derivations> {
+        self.nix_command()
+            .args(["derivation", "show", "--"])
+            .args(paths)
+            .output_checked_as(|context: OutputContext<Output>| {
+                serde_json::from_slice(&context.output().stdout)
+                    .map_err(|err| context.error_msg(err))
+            })
+            .into_diagnostic()
+    }
+
+    pub fn derivation_info(&self, path: &Utf8Path) -> miette::Result<Derivation> {
+        Ok(self
+            .derivation_infos(std::iter::once(path))?
+            .0
+            .into_iter()
+            .next()
+            .ok_or_else(|| miette!("No derivation info given for {path}?"))?)
     }
 }
