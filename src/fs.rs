@@ -1,8 +1,8 @@
 use std::path::Path;
 
 use camino::Utf8PathBuf;
-use miette::miette;
 use miette::IntoDiagnostic;
+use miette::miette;
 
 /// Basically [`std::fs::exists`] but it returns a [`std::fs::Metadata`] and it's backed by
 /// [`fs_err::metadata`] instead.

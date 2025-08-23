@@ -1,10 +1,10 @@
 use miette::IntoDiagnostic;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::reload::Handle;
-use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::Layer;
 use tracing_subscriber::Registry;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::reload::Handle;
+use tracing_subscriber::util::SubscriberInitExt;
 
 type ReloadHandle = Handle<EnvFilter, Registry>;
 
