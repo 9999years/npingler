@@ -120,6 +120,11 @@ pub struct ProfileArgs {
     /// profile.
     #[arg(long)]
     pub extra_switch_args: Option<String>,
+
+    /// If `nix-diff` is available on your `$PATH`, run it to display a diff of the changes
+    /// being made to your profile before building it.
+    #[arg(long)]
+    pub diff_derivations: Option<bool>,
 }
 
 #[derive(Debug, Clone, clap::Args)]

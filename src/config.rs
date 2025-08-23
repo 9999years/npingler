@@ -41,6 +41,7 @@ pub struct Channels {
 pub struct Profile {
     file: Option<String>,
     extra_switch_args: Option<Vec<String>>,
+    diff_derivations: Option<bool>,
 }
 
 /// Configuration loaded from a file.
@@ -333,5 +334,13 @@ impl Config {
             true => RunMode::Dry,
             false => RunMode::Wet,
         }
+    }
+
+    pub fn diff_derivations(&self) -> bool {
+        self.switch_args
+            .profile
+            .diff_derivations
+            .or(self.file.profile.diff_derivations)
+            .unwrap_or(false)
     }
 }
