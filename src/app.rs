@@ -202,10 +202,7 @@ impl App {
         registry: &Option<Registry>,
     ) -> miette::Result<()> {
         let current_path = match registry {
-            Some(registry) => match registry.id_to_path(name) {
-                Some(current_path) => Some(current_path),
-                None => None,
-            },
+            Some(registry) => registry.id_to_path(name),
             None => None,
         };
 
