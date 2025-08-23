@@ -13,7 +13,18 @@ use owo_colors::Stream;
 use tap::TryConv;
 use walkdir::WalkDir;
 
-pub fn diff_trees(
+/// Like [`diff_treesets`] but it collects the inputs into [`BTreeSet`]s for you.
+pub fn diff_trees<'a, 'b>(
+    removed_paths: impl IntoIterator<Item = &'a Utf8Path>,
+    added_paths: impl IntoIterator<Item = &'b Utf8Path>,
+) -> miette::Result<String> {
+    diff_treesets(
+        &removed_paths.into_iter().collect(),
+        &added_paths.into_iter().collect(),
+    )
+}
+
+pub fn diff_treesets(
     removed_paths: &BTreeSet<&Utf8Path>,
     added_paths: &BTreeSet<&Utf8Path>,
 ) -> miette::Result<String> {
