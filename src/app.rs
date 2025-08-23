@@ -1,4 +1,3 @@
-use std::collections::BTreeSet;
 use std::process::Command;
 
 use camino::Utf8Path;
@@ -175,20 +174,20 @@ impl App {
             }
         }
 
-        {
-            let removed_paths = match old_profile.as_deref() {
-                Some(old_profile) => BTreeSet::from([old_profile]),
-                None => BTreeSet::new(),
-            };
-
-            let added_paths = BTreeSet::from([&*package_out_path]);
-
-            if removed_paths == added_paths {
-                tracing::info!("No changes, profile already up to date");
-            } else {
-                let diff_result =
-                    diff_trees(&removed_paths, &BTreeSet::from([&*package_out_path]))?;
-                tracing::info!("Updated Nix profile:\n{}", diff_result);
+        if old_profile.as_ref() == Some(&new_profile) {
+            tracing::info!("No changes, profile already up to date");
+        } else {
+            match diff_trees(
+                old_profile.as_deref(),
+                std::iter::once(new_profile.as_path()),
+            ) {
+                Ok(diff_result) => {
+                    tracing::info!("Updated Nix profile:\n{}", diff_result);
+                }
+                Err(error) => {
+                    tracing::info!("Updated Nix profile to {new_profile}");
+                    tracing::warn!("Failed to diff profiles: {error:?}");
+                }
             }
         }
 
