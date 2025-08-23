@@ -153,12 +153,44 @@ impl App {
     #[instrument(level = "debug", skip(self))]
     pub fn ensure_packages(&self) -> miette::Result<()> {
         tracing::info!("Building profile packages");
-        let new_profile = self.build_npingler_attr("packages")?;
 
         let old_profile = self.get_profile_store_path()?;
+        let old_profile_drv = old_profile
+            .as_deref()
+            .map(|old_profile| self.nix.derivation_info(old_profile))
+            .transpose()?;
         tracing::debug!(?old_profile, "Resolved Nix profile");
 
+        let new_profile: Utf8PathBuf = self.eval_npingler_attr("packages", None)?;
+        let new_profile_drv = self.nix.derivation_info(&new_profile)?;
+
         tracing::info!("Setting profile to {new_profile}");
+
+        if self.config.diff_derivations()
+            && let Some(old_profile_drv) = &old_profile_drv
+            && old_profile_drv != &new_profile_drv
+        {
+            if let Ok(nix_diff) = crate::which::which_global("nix-diff") {
+                // Don't care... but use `status_checked` anyways to get logs :)
+                let _ = Command::new(nix_diff)
+                    .args([old_profile_drv.path.as_str(), new_profile_drv.path.as_str()])
+                    .status_checked();
+            }
+        }
+
+        if !new_profile.exists() {
+            match self.config.run_mode() {
+                crate::config::RunMode::Dry => {
+                    tracing::info!("Would build: {new_profile} from {}", new_profile_drv.path);
+                }
+                crate::config::RunMode::Wet => {
+                    self.nix
+                        .build(&[&format!("{}^out", new_profile_drv.path.as_str())])
+                        .wrap_err("Failed to build new profile")?;
+                }
+            }
+        }
+
         let mut command = self.nix_env_command(self.nix_profile.clone());
         command.args(["--set", new_profile.as_str()]);
         command.args(self.config.profile_extra_switch_args()?);
