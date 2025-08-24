@@ -41,7 +41,7 @@ pub struct Channels {
 pub struct Profile {
     file: Option<String>,
     extra_switch_args: Option<Vec<String>>,
-    diff_derivations: Option<bool>,
+    diff_derivations: Option<Vec<String>>,
 }
 
 /// Configuration loaded from a file.
@@ -335,11 +335,18 @@ impl Config {
         }
     }
 
-    pub fn diff_derivations(&self) -> bool {
-        self.switch_args
+    pub fn diff_derivations(&self) -> miette::Result<Option<Vec<String>>> {
+        Ok(self
+            .switch_args
             .profile
             .diff_derivations
-            .or(self.file.profile.diff_derivations)
-            .unwrap_or(false)
+            .as_deref()
+            .map(|arg| {
+                shell_words::split(arg).into_diagnostic().wrap_err_with(|| {
+                    format!("Failed to shell-split `--diff-derivations` arg: {arg}")
+                })
+            })
+            .transpose()?
+            .or_else(|| self.file.profile.diff_derivations.clone()))
     }
 }

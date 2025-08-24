@@ -125,10 +125,12 @@ pub struct ProfileArgs {
     #[arg(long)]
     pub extra_switch_args: Option<String>,
 
-    /// If `nix-diff` is available on your `$PATH`, run it to display a diff of the changes
-    /// being made to your profile before building it.
+    /// A command, like `nix-diff` or `nvd`, to use to diff derivations. This will be executed
+    /// to display a diff of the changes being made to your profile before building it.
+    ///
+    /// This may contain shell-quoted arguments.
     #[arg(long)]
-    pub diff_derivations: Option<bool>,
+    pub diff_derivations: Option<String>,
 }
 
 #[derive(Debug, Clone, clap::Args)]
