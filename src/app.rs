@@ -164,16 +164,21 @@ impl App {
         let new_profile: Utf8PathBuf = self.eval_npingler_attr("packages", None)?;
         let new_profile_drv = self.nix.derivation_info(&new_profile)?;
 
-        if self.config.diff_derivations()
+        if let Some(diff_derivations_command) = self.config.diff_derivations()?
+            && let Some(command) = diff_derivations_command.first()
             && let Some(old_profile_drv) = &old_profile_drv
             && old_profile_drv != &new_profile_drv
         {
-            if let Ok(nix_diff) = crate::which::which_global("nix-diff") {
-                // Don't care... but use `status_checked` anyways to get logs :)
-                let _ = Command::new(nix_diff)
-                    .args([old_profile_drv.path.as_str(), new_profile_drv.path.as_str()])
-                    .status_checked();
+            // Don't care... but use `status_checked` anyways to get logs :)
+            let mut command = Command::new(command);
+
+            if diff_derivations_command.len() > 1 {
+                command.args(&diff_derivations_command[1..]);
             }
+
+            let _ = command
+                .args([old_profile_drv.path.as_str(), new_profile_drv.path.as_str()])
+                .status_checked();
         }
 
         if !new_profile.exists() {
