@@ -10,20 +10,20 @@ pub struct Args {
     /// Path to the configuration file to use.
     ///
     /// Defaults to `~/.config/npingler/config.toml`.
-    #[arg(long)]
+    #[arg(long, global = true)]
     pub config: Option<Utf8PathBuf>,
 
     /// Path or directory containing npingler Nix expressions.
     ///
     /// Defaults to the `--config` directory.
-    #[arg(long)]
+    #[arg(long, global = true)]
     pub file: Option<String>,
 
     #[command(flatten)]
     pub log: LogArgs,
 
     /// Don't actually change the configuration.
-    #[arg(long, alias = "dry-run")]
+    #[arg(long, alias = "dry-run", global = true)]
     pub dry: bool,
 
     #[command(subcommand)]
@@ -133,15 +133,15 @@ pub struct LogArgs {
     /// Tracing log filter.
     ///
     /// See: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives
-    #[arg(long, env = "NPINGLER_LOG")]
+    #[arg(long, env = "NPINGLER_LOG", global = true)]
     pub log_filter: Option<String>,
 
     /// Alias for `--log-filter=trace`.
-    #[arg(long)]
+    #[arg(long, global = true)]
     pub debug: bool,
 
     /// Alias for `--log-filter=debug`.
-    #[arg(short, long)]
+    #[arg(short, long, global = true)]
     pub verbose: bool,
 }
 
