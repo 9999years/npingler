@@ -49,7 +49,11 @@ pub enum Command {
         switch_args: SwitchArgs,
     },
 
-    // TODO: Build-but-don't-switch command
+    /// Build the current profile but don't switch to it.
+    Build {
+        #[command(flatten)]
+        switch_args: SwitchArgs,
+    },
 
     // TODO: `pin-channels` and `pin-registry` commands would be nice, but the defaults (not
     // pinning channels or the registry) make the behavior very unintuitive.

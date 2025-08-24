@@ -39,7 +39,9 @@ fn main() -> miette::Result<()> {
         cli::Command::Switch { .. } => {
             app.switch()?;
         }
-
+        cli::Command::Build { .. } => {
+            app.build_packages()?;
+        }
         cli::Command::Config(config_command) => match config_command {
             cli::ConfigCommand::Init { output } => Config::init(output.as_deref())?,
         },

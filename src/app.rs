@@ -151,7 +151,7 @@ impl App {
     }
 
     #[instrument(level = "debug", skip(self))]
-    pub fn ensure_packages(&self) -> miette::Result<()> {
+    pub fn build_packages(&self) -> miette::Result<Utf8PathBuf> {
         tracing::info!("Building profile packages");
 
         let old_profile = self.get_profile_store_path()?;
@@ -163,8 +163,6 @@ impl App {
 
         let new_profile: Utf8PathBuf = self.eval_npingler_attr("packages", None)?;
         let new_profile_drv = self.nix.derivation_info(&new_profile)?;
-
-        tracing::info!("Setting profile to {new_profile}");
 
         if self.config.diff_derivations()
             && let Some(old_profile_drv) = &old_profile_drv
@@ -191,21 +189,6 @@ impl App {
             }
         }
 
-        let mut command = self.nix_env_command(self.nix_profile.clone());
-        command.args(["--set", new_profile.as_str()]);
-        command.args(self.config.profile_extra_switch_args()?);
-
-        match self.config.run_mode() {
-            crate::config::RunMode::Dry => {
-                tracing::info!("Would run: {}", Utf8ProgramAndArgs::from(&command));
-            }
-            crate::config::RunMode::Wet => {
-                command
-                    .status_checked()
-                    .wrap_err("Failed to install new profile")?;
-            }
-        }
-
         if old_profile.as_ref() == Some(&new_profile) {
             tracing::info!("No changes, profile already up to date");
         } else {
@@ -220,6 +203,30 @@ impl App {
                     tracing::info!("Updated Nix profile to {new_profile}");
                     tracing::warn!("Failed to diff profiles: {error:?}");
                 }
+            }
+        }
+
+        Ok(new_profile)
+    }
+
+    #[instrument(level = "debug", skip(self))]
+    pub fn ensure_packages(&self) -> miette::Result<()> {
+        let new_profile = self.build_packages()?;
+
+        tracing::info!("Setting profile to {new_profile}");
+
+        let mut command = self.nix_env_command(self.nix_profile.clone());
+        command.args(["--set", new_profile.as_str()]);
+        command.args(self.config.profile_extra_switch_args()?);
+
+        match self.config.run_mode() {
+            crate::config::RunMode::Dry => {
+                tracing::info!("Would run: {}", Utf8ProgramAndArgs::from(&command));
+            }
+            crate::config::RunMode::Wet => {
+                command
+                    .status_checked()
+                    .wrap_err("Failed to install new profile")?;
             }
         }
 
