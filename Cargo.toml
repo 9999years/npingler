@@ -12,6 +12,7 @@ blake3 = { version = "1.5.0", features = ["mmap"] }
 camino = { version = "1.1.6", features = ["serde", "serde1"] }
 clap = { version = "4.4.7", features = ["derive", "wrap_help", "env"] }
 clap_complete = "4.5.57"
+clap_mangen = { version = "0.2.29", optional = true }
 command-error = { version = "0.6.0", features = ["tracing", "miette"] }
 fs-err = "3.1.1"
 gethostname = "1.0.2"
@@ -36,3 +37,6 @@ walkdir = "2.4.0"
 which = "8.0.0"
 whoami = { version = "1.6.1", default-features = false }
 xdg = "3.0.0"
+
+[features]
+clap_mangen = ["dep:clap_mangen"]
