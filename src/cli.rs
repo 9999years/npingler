@@ -60,6 +60,10 @@ pub enum Command {
     /// Commands to initialize the `npingler` configuration file.
     #[command(subcommand)]
     Config(ConfigCommand),
+
+    /// Utility commands to generate shell completions, manpages, etc.
+    #[command(subcommand)]
+    Util(UtilCommand),
 }
 
 #[derive(Debug, Clone, clap::Subcommand)]
@@ -68,6 +72,18 @@ pub enum ConfigCommand {
         /// Path to write the configuration to. Can be `-` for stdout. Defaults to
         /// `~/.config/npingler/config.toml`.
         output: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone, clap::Subcommand)]
+pub enum UtilCommand {
+    GenerateCompletions {
+        /// Path to write the configuration to. Defaults to stdout.
+        #[arg(long)]
+        output: Option<Utf8PathBuf>,
+
+        /// The shell to write completions for.
+        shell: clap_complete::Shell,
     },
 }
 

@@ -2,13 +2,16 @@ use std::process::Command;
 
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use clap::CommandFactory;
 use command_error::CommandExt;
 use command_error::Utf8ProgramAndArgs;
 use miette::Context;
+use miette::IntoDiagnostic;
 use miette::miette;
 use serde::de::DeserializeOwned;
 use tracing::instrument;
 
+use crate::cli;
 use crate::cli::Args;
 use crate::config::Config;
 use crate::diff_trees::diff_trees;
@@ -27,6 +30,78 @@ pub struct App {
 }
 
 impl App {
+    pub fn run(args: Args) -> miette::Result<()> {
+        let filter_reload = crate::tracing::install_tracing(
+            args.log_filter()
+                .as_deref()
+                .unwrap_or(crate::tracing::DEFAULT_FILTER),
+        )?;
+
+        // `App::from_args` requires `nix` is on the `$PATH`, so we handle some util commands like
+        // generating shell completions before we look for that.
+        //
+        // TODO: This is pretty ugly? It would be nice to not match on the command twice like this.
+
+        match &args.command {
+            cli::Command::Config(config_command) => {
+                match config_command {
+                    cli::ConfigCommand::Init { output } => Config::init(output.as_deref())?,
+                }
+                return Ok(());
+            }
+            cli::Command::Util(util_command) => match util_command {
+                cli::UtilCommand::GenerateCompletions { output, shell } => {
+                    let mut clap_command = cli::Args::command();
+                    let bin_name = "npingler";
+                    match output {
+                        None => {
+                            clap_complete::generate(
+                                *shell,
+                                &mut clap_command,
+                                bin_name,
+                                &mut std::io::stdout(),
+                            );
+                        }
+                        Some(path) => {
+                            let mut file = fs_err::File::create(&path).into_diagnostic()?;
+                            clap_complete::generate(*shell, &mut clap_command, bin_name, &mut file);
+                        }
+                    }
+                    return Ok(());
+                }
+            },
+            _ => {
+                let app = App::from_args(args)?;
+                crate::tracing::update_log_filters(&filter_reload, &app.config.log_filter())?;
+
+                // TODO: Avoid duplicate evals!
+
+                match app.command() {
+                    cli::Command::Update { no_switch, .. } => {
+                        app.update()?;
+                        if !no_switch {
+                            app.switch()?;
+                        }
+                    }
+                    cli::Command::Switch { .. } => {
+                        app.switch()?;
+                    }
+                    cli::Command::Build { .. } => {
+                        app.build_packages()?;
+                    }
+                    cli::Command::Config(config_command) => match config_command {
+                        cli::ConfigCommand::Init { .. } => unreachable!(),
+                    },
+                    cli::Command::Util(util_command) => match util_command {
+                        cli::UtilCommand::GenerateCompletions { .. } => unreachable!(),
+                    },
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn from_args(args: Args) -> miette::Result<Self> {
         let config = Config::from_args(args)?;
         let nix = config.nix()?;
