@@ -88,11 +88,15 @@ impl Config {
         let project_paths = ProjectPaths::new()?;
         let paths = args.config_paths(&project_paths)?;
 
+        // This is really silly.
         let switch_args = match &args.command {
             crate::cli::Command::Update { switch_args, .. } => switch_args.clone(),
             crate::cli::Command::Switch { switch_args } => switch_args.clone(),
             crate::cli::Command::Config(_) => SwitchArgs::default(),
             crate::cli::Command::Build { switch_args } => switch_args.clone(),
+            crate::cli::Command::Util(util_command) => match util_command {
+                crate::cli::UtilCommand::GenerateCompletions { .. } => SwitchArgs::default(),
+            },
         };
 
         tracing::trace!(?paths, "Looking for configuration file");
