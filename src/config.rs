@@ -244,27 +244,28 @@ impl Config {
     }
 
     pub fn channels_pin_root(&self) -> bool {
-        if let Some(pin) = self.switch_args.channel.pin_channels_root {
-            return pin;
-        }
-
-        if let Some(pin) = self.file.channels.pin_root {
-            return pin;
-        }
-
-        false
+        self.switch_args
+            .channel
+            .pin_channels_root
+            .or(self.file.channels.pin_root)
+            .unwrap_or(false)
     }
 
     pub fn channels_root_profile(&self) -> miette::Result<Utf8PathBuf> {
-        if let Some(profile) = &self.switch_args.channel.root_profile {
-            return Ok(profile.clone());
-        }
-
-        if let Some(profile) = &self.file.channels.root_profile {
-            return self.project_paths.expand_tilde(profile);
-        }
-
-        Ok(Utf8Path::new("/nix/var/nix/profiles/per-user/root/channels").to_owned())
+        self.switch_args
+            .channel
+            .root_profile
+            .clone()
+            .map(Ok)
+            .or(self
+                .file
+                .channels
+                .root_profile
+                .as_deref()
+                .map(|profile| self.project_paths.expand_tilde(profile)))
+            .unwrap_or_else(|| {
+                Ok(Utf8Path::new("/nix/var/nix/profiles/per-user/root/channels").to_owned())
+            })
     }
 
     pub fn root_registry_path(&self) -> miette::Result<Utf8PathBuf> {
@@ -280,29 +281,25 @@ impl Config {
     }
 
     pub fn registry_pin_root(&self) -> bool {
-        if let Some(pin_root) = self.switch_args.registry.pin_registry_root {
-            return pin_root;
-        }
-
-        if let Some(pin_root) = self.file.registry.pin_root {
-            return pin_root;
-        }
-
-        false
+        self.switch_args
+            .registry
+            .pin_registry_root
+            .or(self.file.registry.pin_root)
+            .unwrap_or(false)
     }
 
     pub fn profile_extra_switch_args(&self) -> miette::Result<Vec<String>> {
-        if let Some(args) = self.switch_args.profile.extra_switch_args.clone() {
-            return shell_words::split(&args)
-                .into_diagnostic()
-                .wrap_err_with(|| format!("Failed to shell unquote: {args}"));
-        }
-
-        if let Some(args) = self.file.profile.extra_switch_args.clone() {
-            return Ok(args);
-        }
-
-        Ok(Default::default())
+        self.switch_args
+            .profile
+            .extra_switch_args
+            .as_deref()
+            .map(|args| {
+                shell_words::split(&args)
+                    .into_diagnostic()
+                    .wrap_err_with(|| format!("Failed to shell unquote: {args}"))
+            })
+            .or_else(|| self.file.profile.extra_switch_args.clone().map(Ok))
+            .unwrap_or_else(|| Ok(Default::default()))
     }
 
     /// Write the default config file.
