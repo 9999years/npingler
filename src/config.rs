@@ -153,30 +153,20 @@ impl Config {
     }
 
     pub fn nix_file(&self) -> miette::Result<Utf8PathBuf> {
+        fn file_does_not_exist(description: &str, file: &str) -> miette::Report {
+            miette!(
+                "{description} does not exist or (if it's a directory) contain a `default.nix`: {file}"
+            )
+        }
+
         if let Some(file) = &self.args.file {
-            match Self::resolve_nix_file(&self.project_paths.expand_tilde(file)?)? {
-                Some(path) => {
-                    return Ok(path);
-                }
-                None => {
-                    return Err(miette!(
-                        "`--file` does not exist or (if it's a directory) contain a `default.nix`: {file}"
-                    ));
-                }
-            }
+            return Self::resolve_nix_file(&self.project_paths.expand_tilde(file)?)?
+                .ok_or_else(|| file_does_not_exist("`--file`", file));
         }
 
         if let Some(file) = &self.file.file {
-            match Self::resolve_nix_file(&self.project_paths.expand_tilde(file)?)? {
-                Some(path) => {
-                    return Ok(path);
-                }
-                None => {
-                    return Err(miette!(
-                        "`file` setting in config does not exist or (if it's a directory) contain a `default.nix`: {file}"
-                    ));
-                }
-            }
+            return Self::resolve_nix_file(&self.project_paths.expand_tilde(file)?)?
+                .ok_or_else(|| file_does_not_exist("`file` setting in config", file));
         }
 
         let mut paths = self.project_paths.nix_paths()?;
