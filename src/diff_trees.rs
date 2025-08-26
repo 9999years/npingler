@@ -241,11 +241,11 @@ fn walk_removed_tree<'a>(
             break;
         }
 
-        if removed_entry.file_type().is_dir() {
-            if let DiffKind::Removed = entry.kind {
-                // Don't recurse if a directory has been removed.
-                iterator.skip_current_dir();
-            }
+        if removed_entry.file_type().is_dir()
+            && let DiffKind::Removed = entry.kind
+        {
+            // Don't recurse if a directory has been removed.
+            iterator.skip_current_dir();
         }
 
         entry.old = Some(PathInfo {

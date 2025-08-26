@@ -63,7 +63,7 @@ impl App {
                             );
                         }
                         Some(path) => {
-                            let mut file = fs_err::File::create(&path).into_diagnostic()?;
+                            let mut file = fs_err::File::create(path).into_diagnostic()?;
                             clap_complete::generate(*shell, &mut clap_command, bin_name, &mut file);
                         }
                     }

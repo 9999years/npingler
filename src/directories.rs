@@ -92,10 +92,10 @@ impl ProjectPaths {
         //
         // See: https://git.lix.systems/lix-project/lix/src/commit/5dc847b47b4e0e970d6a1cf2da0abd7a4e1bad2e/lix/libstore/profiles.cc#L331-L349
 
-        if nix.get_config("use-xdg-base-directories")?.as_deref() == Some("true") {
-            if let Some(profile) = self.xdg_nix_profile()? {
-                return Ok(Some(profile));
-            }
+        if nix.get_config("use-xdg-base-directories")?.as_deref() == Some("true")
+            && let Some(profile) = self.xdg_nix_profile()?
+        {
+            return Ok(Some(profile));
         }
 
         let home_dir = self.home_dir().to_path_buf();

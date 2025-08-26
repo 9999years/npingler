@@ -290,7 +290,7 @@ impl Config {
             .extra_switch_args
             .as_deref()
             .map(|args| {
-                shell_words::split(&args)
+                shell_words::split(args)
                     .into_diagnostic()
                     .wrap_err_with(|| format!("Failed to shell unquote: {args}"))
             })
@@ -306,13 +306,12 @@ impl Config {
                     print!("{}", DEFAULT_CONFIG);
                     return Ok(());
                 } else {
-                    path.to_owned().try_into()?
+                    path.to_owned().into()
                 }
             }
             None => ProjectPaths::new()?.default_config_path()?,
         };
 
-        let path = Utf8PathBuf::from(path);
         if path.exists() {
             return Err(miette!("Path already exists: {path}"));
         }
