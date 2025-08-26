@@ -21,3 +21,17 @@ jobs:
 
     - name: Build with Nix
       run: nix build --print-build-logs --file .
+
+  clippy:
+    runs-on: ubuntu-latest
+    name: Clippy
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v5
+
+    - name: Install Nix
+      uses: cachix/install-nix-action@v31
+
+    - name: Lint with Clippy
+      run: nix build --print-build-logs --file . checks.clippy
