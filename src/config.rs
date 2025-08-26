@@ -96,6 +96,8 @@ impl Config {
             crate::cli::Command::Build { switch_args } => switch_args.clone(),
             crate::cli::Command::Util(util_command) => match util_command {
                 crate::cli::UtilCommand::GenerateCompletions { .. } => SwitchArgs::default(),
+                #[cfg(feature = "clap_mangen")]
+                crate::cli::UtilCommand::GenerateManPages { .. } => SwitchArgs::default(),
             },
         };
 
