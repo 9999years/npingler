@@ -14,6 +14,7 @@ pkgs.npinglerPackages.npingler.overrideAttrs (prev: {
     inherit (pkgs.npinglerPackages)
       npingler
       shell
+      checks
       ;
   };
 })
