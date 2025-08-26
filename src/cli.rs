@@ -68,6 +68,7 @@ pub enum Command {
 
 #[derive(Debug, Clone, clap::Subcommand)]
 pub enum ConfigCommand {
+    /// Generate a default `config.toml` file.
     Init {
         /// Path to write the configuration to. Can be `-` for stdout. Defaults to
         /// `~/.config/npingler/config.toml`.
@@ -77,6 +78,7 @@ pub enum ConfigCommand {
 
 #[derive(Debug, Clone, clap::Subcommand)]
 pub enum UtilCommand {
+    /// Generate shell completions.
     GenerateCompletions {
         /// Path to write the configuration to. Defaults to stdout.
         #[arg(long)]
@@ -84,6 +86,13 @@ pub enum UtilCommand {
 
         /// The shell to write completions for.
         shell: clap_complete::Shell,
+    },
+
+    /// Generate man pages.
+    #[cfg(feature = "clap_mangen")]
+    GenerateManPages {
+        /// Directory to write the man pages to.
+        output: Utf8PathBuf,
     },
 }
 

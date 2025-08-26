@@ -69,6 +69,15 @@ impl App {
                     }
                     return Ok(());
                 }
+
+                #[cfg(feature = "clap_mangen")]
+                cli::UtilCommand::GenerateManPages { output } => {
+                    let command = cli::Args::command();
+                    clap_mangen::generate_to(command, output)
+                        .into_diagnostic()
+                        .wrap_err("Failed to generate man pages")?;
+                    return Ok(());
+                }
             },
             _ => {
                 let app = App::from_args(args)?;
@@ -94,6 +103,8 @@ impl App {
                     },
                     cli::Command::Util(util_command) => match util_command {
                         cli::UtilCommand::GenerateCompletions { .. } => unreachable!(),
+                        #[cfg(feature = "clap_mangen")]
+                        cli::UtilCommand::GenerateManPages { .. } => unreachable!(),
                     },
                 }
             }
