@@ -35,3 +35,17 @@ jobs:
 
     - name: Lint with Clippy
       run: nix build --print-build-logs --file . checks.clippy
+
+  treefmt:
+    runs-on: ubuntu-latest
+    name: Treefmt
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v5
+
+    - name: Install Nix
+      uses: cachix/install-nix-action@v31
+
+    - name: Format with Treefmt
+      run: nix build --print-build-logs --file . checks.treefmt

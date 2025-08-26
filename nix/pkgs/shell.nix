@@ -2,17 +2,20 @@
   mkShell,
   cargo,
   rustc,
-  rustfmt,
   rust-analyzer,
+  checks,
 }:
 
 mkShell {
   name = "npingler-shell";
 
+  inputsFrom = [
+    checks.treefmt
+  ];
+
   packages = [
     cargo
     rustc
-    rustfmt
     rust-analyzer
   ];
 }
