@@ -4,6 +4,8 @@
   rustc,
   rustfmt,
   rust-analyzer,
+  treefmt,
+  actionlint,
 }:
 
 mkShell {
@@ -14,5 +16,7 @@ mkShell {
     rustc
     rustfmt
     rust-analyzer
+    treefmt
+    actionlint
   ];
 }
