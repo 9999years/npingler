@@ -158,11 +158,10 @@ impl Nix {
     }
 
     pub fn derivation_info(&self, path: &Utf8Path) -> miette::Result<Derivation> {
-        Ok(self
-            .derivation_infos(std::iter::once(path))?
+        self.derivation_infos(std::iter::once(path))?
             .0
             .into_iter()
             .next()
-            .ok_or_else(|| miette!("No derivation info given for {path}?"))?)
+            .ok_or_else(|| miette!("No derivation info given for {path}?"))
     }
 }
