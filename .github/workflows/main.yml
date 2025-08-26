@@ -1,0 +1,22 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v5
+
+    - name: Install Nix
+      uses: cachix/install-nix-action@v31
+
+    - name: Build with Nix
+      run: nix build --print-build-logs --file .
