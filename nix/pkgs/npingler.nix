@@ -4,6 +4,7 @@
   buildPackages,
   rustPlatform,
   installShellFiles,
+  src,
 }:
 
 let
@@ -14,7 +15,7 @@ rustPlatform.buildRustPackage {
   pname = "npingler";
   version = "unstable-2025-08-24";
 
-  src = lib.cleanSource ../../.;
+  inherit src;
 
   cargoHash = "sha256-71uqdWsXBd6qsplwI3cA2TxXoj6JOThEHxnv9u6iraQ=";
 
