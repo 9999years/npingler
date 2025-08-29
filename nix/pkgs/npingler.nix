@@ -5,6 +5,7 @@
   rustPlatform,
   installShellFiles,
   src,
+  cargo-toml,
 }:
 
 let
@@ -13,7 +14,7 @@ let
 in
 rustPlatform.buildRustPackage {
   pname = "npingler";
-  version = "unstable-2025-08-24";
+  version = cargo-toml.package.version;
 
   inherit src;
 
