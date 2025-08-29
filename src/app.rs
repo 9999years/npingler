@@ -8,13 +8,13 @@ use command_error::Utf8ProgramAndArgs;
 use miette::Context;
 use miette::IntoDiagnostic;
 use miette::miette;
+use owo_colors::OwoColorize;
 use serde::de::DeserializeOwned;
 use tracing::instrument;
 
 use crate::cli;
 use crate::cli::Args;
 use crate::config::Config;
-use crate::diff_trees::diff_trees;
 use crate::format_bulleted_list;
 use crate::fs::resolve_symlink_utf8;
 use crate::nix::Nix;
@@ -283,21 +283,40 @@ impl App {
         if old_profile.as_ref() == Some(&new_profile) {
             tracing::info!("No changes, profile already up to date");
         } else {
-            match diff_trees(
-                old_profile.as_deref(),
-                std::iter::once(new_profile.as_path()),
-            ) {
-                Ok(diff_result) => {
-                    tracing::info!("Updated Nix profile:\n{}", diff_result);
-                }
-                Err(error) => {
-                    tracing::info!("Updated Nix profile to {new_profile}");
-                    tracing::warn!("Failed to diff profiles: {error:?}");
-                }
-            }
+            self.diff_trees(old_profile.as_deref(), new_profile.as_path())?;
         }
 
         Ok(new_profile)
+    }
+
+    fn diff_trees(&self, old: Option<&Utf8Path>, new: &Utf8Path) -> miette::Result<()> {
+        let old = match old {
+            None => {
+                tracing::info!("Updated Nix profile to {new}");
+                return Ok(());
+            }
+            Some(old) => old,
+        };
+
+        let diff = diff_trees::Diff::new(old.as_std_path(), new.as_std_path()).into_diagnostic()?;
+
+        if diff.is_empty() {
+            // Sometimes, the profile path changes, but no installed paths actually
+            // change their contents. Instead of showing a blank diff, we list the old and new
+            // profiles.
+            tracing::info!(
+                "Updated Nix profile:\n{}\n{}",
+                format!("- {old}").red(),
+                format!("+ {new}").green(),
+            );
+        } else {
+            tracing::info!(
+                "Updated Nix profile:\n{}",
+                diff.display(diff_trees::DisplayDiffOpts::new().color(true))
+            );
+        }
+
+        Ok(())
     }
 
     #[instrument(level = "debug", skip(self))]

@@ -3,7 +3,6 @@ use clap::Parser;
 mod app;
 mod cli;
 mod config;
-mod diff_trees;
 mod directories;
 mod format_bulleted_list;
 mod fs;
