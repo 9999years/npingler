@@ -272,6 +272,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c74b8349d32d297c9134b8c88677813a227df8f779daa29bfc29c183fe3dca6"
 
 [[package]]
+name = "diff-trees"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46a7830cd28feb30ff5c774edf5cb086ff0aa4129cc33629e75aa707a0fa385d"
+dependencies = [
+ "blake3",
+ "iddqd",
+ "owo-colors 4.2.2",
+ "tracing",
+ "walkdir",
+]
+
+[[package]]
 name = "dirs"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -599,6 +612,7 @@ dependencies = [
  "clap_complete",
  "clap_mangen",
  "command-error",
+ "diff-trees",
  "fs-err",
  "gethostname",
  "iddqd",
