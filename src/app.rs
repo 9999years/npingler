@@ -289,8 +289,8 @@ impl App {
 
         if old_profile.as_ref() == Some(&new_profile) {
             tracing::info!("No changes, profile already up to date");
-        } else {
-            self.diff_trees(old_profile.as_deref(), new_profile.as_path())?;
+        } else if let Err(err) = self.diff_trees(old_profile.as_deref(), new_profile.as_path()) {
+            tracing::debug!("Failed to diff profiles {old_profile:?} -> {new_profile}:\n{err}");
         }
 
         Ok(new_profile)
