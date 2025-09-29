@@ -41,3 +41,12 @@ xdg = "3.0.0"
 
 [features]
 clap_mangen = ["dep:clap_mangen"]
+
+# See: https://github.com/crate-ci/cargo-release/blob/master/docs/reference.md
+[workspace.metadata.release]
+# Set the commit message.
+pre-release-commit-message = "Release {{crate_name}} version {{version}}"
+consolidate-commits = false # One commit per crate.
+tag = false # Don't tag commits.
+push = false # Don't do `git push`.
+publish = false # Don't do `cargo publish`.
