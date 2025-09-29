@@ -24,7 +24,7 @@ use crate::pins::NixPins;
 pub struct App {
     pub config: Config,
     nix_file: Utf8PathBuf,
-    nix_profile: Option<Utf8PathBuf>,
+    nix_profile: Utf8PathBuf,
     hostname: String,
     nix: Nix,
 }
@@ -229,11 +229,8 @@ impl App {
         Ok(())
     }
 
-    fn get_profile_store_path(&self) -> miette::Result<Option<Utf8PathBuf>> {
-        match self.nix_profile.as_deref() {
-            Some(profile) => Ok(Some(resolve_symlink_utf8(profile.to_owned())?)),
-            None => Ok(None),
-        }
+    fn get_profile_store_path(&self) -> miette::Result<Utf8PathBuf> {
+        resolve_symlink_utf8(self.nix_profile.clone())
     }
 
     #[instrument(level = "debug", skip(self))]
@@ -241,8 +238,8 @@ impl App {
         tracing::info!("Building profile packages");
 
         let old_profile = self.get_profile_store_path()?;
-        let old_profile_drv = old_profile.as_deref().and_then(|old_profile| {
-            match self.nix.derivation_info(old_profile) {
+        let old_profile_drv = {
+            match self.nix.derivation_info(&old_profile) {
                 Ok(drv) => Some(drv),
                 Err(err) => {
                     tracing::warn!(
@@ -251,7 +248,7 @@ impl App {
                     None
                 }
             }
-        });
+        };
         tracing::debug!(?old_profile, "Resolved Nix profile");
 
         let new_profile: Utf8PathBuf = self.eval_npingler_attr("packages", None)?;
@@ -287,10 +284,11 @@ impl App {
             }
         }
 
-        if old_profile.as_ref() == Some(&new_profile) {
+        if old_profile.as_path() == new_profile.as_path() {
             tracing::info!("No changes, profile already up to date");
-        } else if let Err(err) = self.diff_trees(old_profile.as_deref(), new_profile.as_path()) {
-            tracing::debug!("Failed to diff profiles {old_profile:?} -> {new_profile}:\n{err}");
+        } else if let Err(err) = self.diff_trees(Some(old_profile.as_path()), new_profile.as_path())
+        {
+            tracing::debug!("Failed to diff profiles {old_profile} -> {new_profile}:\n{err}");
         }
 
         Ok(new_profile)
@@ -332,7 +330,7 @@ impl App {
 
         tracing::info!("Setting profile to {new_profile}");
 
-        let mut command = self.nix_env_command(self.nix_profile.clone());
+        let mut command = self.nix_env_command(Some(self.nix_profile.clone()));
         command.args(["--set", new_profile.as_str()]);
         command.args(self.config.profile_extra_switch_args()?);
 
