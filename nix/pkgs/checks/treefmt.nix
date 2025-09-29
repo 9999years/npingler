@@ -10,6 +10,10 @@
 mkCheck {
   name = "treefmt";
 
+  extraSrcs = [
+    "treefmt.toml"
+  ];
+
   checkInputs = [
     pkgs.treefmt
     nixfmt
