@@ -22,16 +22,20 @@ pub fn resolve_symlink_utf8(mut path: Utf8PathBuf) -> miette::Result<Utf8PathBuf
         .into_diagnostic()?
         .is_symlink()
     {
-        let dest = fs_err::read_link(&path).into_diagnostic()?;
-        if dest.is_absolute() {
-            return dest.try_into().into_diagnostic();
-        } else {
-            path = path
-                .parent()
-                .ok_or_else(|| miette!("Path has no parent: {path}"))?
-                .join(&Utf8PathBuf::try_from(dest).into_diagnostic()?);
-        }
+        path = resolve_symlink_once_utf8(path)?;
     }
 
     Ok(path)
+}
+
+pub fn resolve_symlink_once_utf8(path: Utf8PathBuf) -> miette::Result<Utf8PathBuf> {
+    let dest = fs_err::read_link(&path).into_diagnostic()?;
+    if dest.is_absolute() {
+        dest.try_into().into_diagnostic()
+    } else {
+        Ok(path
+            .parent()
+            .ok_or_else(|| miette!("Path has no parent: {path}"))?
+            .join(&Utf8PathBuf::try_from(dest).into_diagnostic()?))
+    }
 }

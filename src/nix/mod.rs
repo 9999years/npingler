@@ -128,6 +128,10 @@ impl Nix {
             .into_diagnostic()
     }
 
+    pub fn use_xdg_base_directories(&self) -> miette::Result<bool> {
+        Ok(self.get_config("use-xdg-base-directories")?.as_deref() == Some("true"))
+    }
+
     pub fn system_registry_path() -> &'static Utf8Path {
         Utf8Path::new("/etc/nix/registry.json")
     }

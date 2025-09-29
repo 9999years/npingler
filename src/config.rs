@@ -223,13 +223,13 @@ impl Config {
         }
     }
 
-    pub fn nix_profile(&self, nix: &Nix) -> miette::Result<Option<Utf8PathBuf>> {
+    pub fn nix_profile(&self, nix: &Nix) -> miette::Result<Utf8PathBuf> {
         if let Some(profile) = self.switch_args.profile.profile.as_deref() {
-            return Ok(Some(profile.to_path_buf()));
+            return Ok(profile.to_path_buf());
         }
 
         if let Some(profile) = self.file.profile.file.as_deref() {
-            return Ok(Some(self.project_paths.expand_tilde(profile)?));
+            return self.project_paths.expand_tilde(profile);
         }
 
         self.project_paths.nix_profile(nix)

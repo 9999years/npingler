@@ -87,66 +87,71 @@ impl ProjectPaths {
     }
 
     /// Get the path to the user's Nix profile, if it exists.
-    pub fn nix_profile(&self, nix: &Nix) -> miette::Result<Option<Utf8PathBuf>> {
-        // TODO: I'm not sure this function is correct; compare against upstream.
+    pub fn nix_profile(&self, nix: &Nix) -> miette::Result<Utf8PathBuf> {
+        // I'm _pretty_ sure this does the same thing as upstream (minus the root profile
+        // handling).
         //
         // See: https://git.lix.systems/lix-project/lix/src/commit/5dc847b47b4e0e970d6a1cf2da0abd7a4e1bad2e/lix/libstore/profiles.cc#L331-L349
 
-        if nix.get_config("use-xdg-base-directories")?.as_deref() == Some("true")
+        let profile_link = if nix.use_xdg_base_directories()?
             && let Some(profile) = self.xdg_nix_profile()?
         {
-            return Ok(Some(profile));
+            profile
+        } else {
+            let home_dir = self.home_dir().to_path_buf();
+            home_dir.tap_mut(|p| p.push(".nix-profile"))
+        };
+
+        match self.nix_profile_link_inner(&profile_link) {
+            Ok(()) => crate::fs::resolve_symlink_once_utf8(profile_link),
+            Err(err) => {
+                tracing::debug!("Failed to get Nix profile link:\n{err}");
+                Ok(profile_link)
+            }
+        }
+    }
+
+    fn nix_profile_link_inner(&self, profile_link: &Utf8Path) -> miette::Result<()> {
+        if let Some(profile) = self.nix_profiles_dir()?.map(|mut dir| {
+            dir.push("profile");
+            dir
+        }) && profile.symlink_metadata().is_err()
+        {
+            fs_err::os::unix::fs::symlink(profile_link, &profile).into_diagnostic()?;
         }
 
-        let home_dir = self.home_dir().to_path_buf();
+        Ok(())
+    }
 
-        let default_profile = home_dir.tap_mut(|p| p.push(".nix-profile"));
-
-        // NB: This will return `false` if the profile is a symlink to a nonexistent directory.
-        // https://docs.rs/camino/latest/camino/struct.Utf8PathBuf.html#method.exists
-        // This matters because Nix will create a symlink to a nonexistent directory:
-        // https://github.com/NixOS/nix/issues/3051
-        if default_profile.exists() {
-            return Ok(Some(default_profile));
-        }
-
-        let user_profile: Utf8PathBuf = [
-            "/nix",
-            "var",
-            "nix",
-            "profiles",
-            "per-user",
-            &whoami::username(),
-            "profile",
-        ]
-        .iter()
-        .collect();
-
-        if user_profile.exists() {
-            return Ok(Some(user_profile));
-        }
-
-        if let Some(profile) = self.xdg_nix_profile()? {
-            return Ok(Some(profile));
-        }
-
-        Ok(None)
+    /// Get `~/.local/state/nix/profiles`.
+    fn nix_profiles_dir(&self) -> miette::Result<Option<Utf8PathBuf>> {
+        Ok(self.xdg_nix_dir()?.map(|mut dir| {
+            dir.push("profiles");
+            dir
+        }))
     }
 
     /// Get the new `use-xdg-base-directories` Nix profile path,
-    /// `~/.local/state/nix/profiles/profile`. I had stuff in here on my machine even though I
-    /// hadn't set `use-xdg-base-directories`, so I think some stuff writes here regardless of what
-    /// you put in that setting? Therefore we try it twice, at high priority if you have that
-    /// setting enabled, and at low priority if we can't find other profiles.
+    /// `~/.local/state/nix/profile`.
     fn xdg_nix_profile(&self) -> miette::Result<Option<Utf8PathBuf>> {
+        Ok(self.xdg_nix_dir()?.and_then(|mut dir| {
+            dir.push("profile");
+            if dir.symlink_metadata().is_ok() {
+                Some(dir)
+            } else {
+                None
+            }
+        }))
+    }
+
+    /// Get `~/.local/state/nix`.
+    fn xdg_nix_dir(&self) -> miette::Result<Option<Utf8PathBuf>> {
         if let Some(state_home) = self.xdg.get_state_home() {
             let state_home = Utf8PathBuf::try_from(state_home).into_diagnostic()?;
-            let nix_profile_home = state_home.join("nix/profile");
-            if nix_profile_home.symlink_metadata().is_ok() {
-                return Ok(Some(nix_profile_home));
-            }
+            Ok(Some(state_home.join("nix")))
+        } else {
+            Ok(None)
         }
-        Ok(None)
     }
 
     pub fn expand_tilde(&self, path: &str) -> miette::Result<Utf8PathBuf> {
