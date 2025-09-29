@@ -11,6 +11,7 @@ mkShell {
 
   inputsFrom = [
     checks.treefmt
+    checks.clippy
   ];
 
   packages = [
