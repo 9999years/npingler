@@ -1,3 +1,4 @@
+{ }:
 let
   sources = import ./npins;
   pkgs = import sources.nixpkgs {
@@ -11,10 +12,15 @@ pkgs.npinglerPackages.npingler.overrideAttrs (prev: {
   passthru = (prev.passthru or { }) // {
     inherit pkgs;
 
+    inherit (pkgs)
+      cargo
+      ;
+
     inherit (pkgs.npinglerPackages)
       npingler
       shell
       checks
+      make-release-commit
       ;
   };
 })

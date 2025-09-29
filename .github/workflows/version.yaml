@@ -1,0 +1,68 @@
+---
+on:
+  workflow_dispatch:
+    inputs:
+      bump_type:
+        description: 'Version bump type to perform'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+        - patch
+        - minor
+        - major
+
+name: Update versions and create release PR
+
+jobs:
+  version:
+    name: Bump version and create release PR
+    runs-on: ubuntu-latest
+    steps:
+      # See: https://github.com/peter-evans/create-pull-request/blob/main/docs/concepts-guidelines.md#authenticating-with-github-app-generated-tokens
+      - uses: actions/create-github-app-token@v2
+        id: generate_token
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          # Fetch all history/tags (needed to compute versions)
+          fetch-depth: 0
+
+      - uses: cachix/install-nix-action@v31
+
+      - name: Get old version number
+        id: old_cargo_metadata
+        run: echo "version=$(nix eval --raw -f . version)" >> "$GITHUB_OUTPUT"
+
+      - name: Increment `Cargo.toml` version
+        run: nix run -f . make-release-commit -- ${{ inputs.bump_type }}
+
+      - name: Get new version number
+        id: new_cargo_metadata
+        run: echo "version=$(nix eval --raw -f . version)" >> "$GITHUB_OUTPUT"
+
+      - name: Create release PR
+        id: release_pr
+        uses: peter-evans/create-pull-request@v7
+        with:
+          # I'd love a better way of implementing this but GitHub doesn't have
+          # one: https://github.com/github-community/community/discussions/13836
+          #
+          # Also, PRs created with the default `secrets.GITHUB_TOKEN` won't
+          # trigger `pull_request` workflows, so regular CI won't run either.
+          # See: https://github.com/orgs/community/discussions/65321
+          #
+          # See: https://github.com/peter-evans/create-pull-request/blob/main/docs/concepts-guidelines.md#authenticating-with-github-app-generated-tokens
+          token: ${{ steps.generate_token.outputs.token }}
+          branch: release/${{ steps.new_cargo_metadata.outputs.version }}
+          delete-branch: true
+          base: main
+          title: Release version ${{ steps.new_cargo_metadata.outputs.version }}
+          body: |
+            Update version to ${{ steps.new_cargo_metadata.outputs.version }} with [cargo-release](https://github.com/crate-ci/cargo-release).
+            Merge this PR to build and publish a new release.
+          labels: release
