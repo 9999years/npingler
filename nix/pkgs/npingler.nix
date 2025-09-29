@@ -18,7 +18,7 @@ rustPlatform.buildRustPackage {
 
   inherit src;
 
-  cargoHash = "sha256-bP3NO87OxxUzopIud2lr/l+UjcWYDfogco1zfc07QWk=";
+  cargoHash = "sha256-2ocT1c25eQ5++GJoAtjkGZqeUmpcZb/jkHjvykOF/kc=";
 
   buildFeatures = [ "clap_mangen" ];
 
