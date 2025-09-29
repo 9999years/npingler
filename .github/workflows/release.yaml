@@ -69,7 +69,7 @@ jobs:
 
       - name: Build npingler
         run: |
-          nix build -f .
+          nix build --print-build-logs -f .
 
       - name: Publish to crates.io
         env:
