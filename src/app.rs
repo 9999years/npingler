@@ -241,10 +241,17 @@ impl App {
         tracing::info!("Building profile packages");
 
         let old_profile = self.get_profile_store_path()?;
-        let old_profile_drv = old_profile
-            .as_deref()
-            .map(|old_profile| self.nix.derivation_info(old_profile))
-            .transpose()?;
+        let old_profile_drv = old_profile.as_deref().and_then(|old_profile| {
+            match self.nix.derivation_info(old_profile) {
+                Ok(drv) => Some(drv),
+                Err(err) => {
+                    tracing::warn!(
+                        "Failed to get derivation info for old profile {old_profile}:\n{err}"
+                    );
+                    None
+                }
+            }
+        });
         tracing::debug!(?old_profile, "Resolved Nix profile");
 
         let new_profile: Utf8PathBuf = self.eval_npingler_attr("packages", None)?;
