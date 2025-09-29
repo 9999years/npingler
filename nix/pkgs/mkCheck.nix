@@ -1,4 +1,5 @@
 {
+  lib,
   stdenv,
   npingler,
   src,
@@ -9,6 +10,7 @@
 {
   name,
   checkPhase,
+  extraSrcs ? [ ],
   checkInputs ? [ ],
   derivationArgs ? { },
 }:
@@ -16,7 +18,11 @@ stdenv.mkDerivation (
   {
     name = "${name}-check";
 
-    inherit src;
+    # Narsty tbqh.
+    src = src.override {
+      inherit extraSrcs;
+    };
+
     inherit (npingler) cargoDeps;
 
     nativeBuildInputs = [
