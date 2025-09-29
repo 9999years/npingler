@@ -55,7 +55,7 @@ jobs:
 
       - name: Get version number
         id: get_cargo_metadata
-        run: echo "version=$(nix run .#get-crate-version)" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(nix eval --raw -f . version)" >> "$GITHUB_OUTPUT"
 
   build:
     name: Release Build
