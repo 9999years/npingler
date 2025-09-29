@@ -1,4 +1,5 @@
+{ }:
 let
-  npingler = import ./default.nix;
+  npingler = import ./default.nix { };
 in
 npingler.shell
