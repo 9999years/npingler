@@ -338,6 +338,14 @@ impl App {
 
         tracing::info!("Setting profile to {new_profile}");
 
+        if let Some(profile_dir) = self.nix_profile.parent()
+            && fs_err::symlink_metadata(profile_dir).is_err()
+        {
+            fs_err::create_dir_all(profile_dir)
+                .into_diagnostic()
+                .wrap_err("Failed to create missing Nix profile directory")?;
+        }
+
         let mut command = self.nix_env_command(Some(self.nix_profile.clone()));
         command.args(["--set", new_profile.as_str()]);
         command.args(self.config.profile_extra_switch_args()?);
