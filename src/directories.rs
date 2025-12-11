@@ -115,9 +115,9 @@ impl ProjectPaths {
         if let Some(profile) = self.nix_profiles_dir()?.map(|mut dir| {
             dir.push("profile");
             dir
-        }) && profile.symlink_metadata().is_err()
+        }) && profile_link.symlink_metadata().is_err()
         {
-            fs_err::os::unix::fs::symlink(profile_link, &profile).into_diagnostic()?;
+            fs_err::os::unix::fs::symlink(&profile, profile_link).into_diagnostic()?;
         }
 
         Ok(())
