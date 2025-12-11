@@ -409,13 +409,24 @@ impl App {
         tracing::info!("Pinning channels");
 
         let profile = self.config.channels_root_profile()?;
+        tracing::debug!(?profile, "Resolved root profile");
         let channels = self.build_npingler_attr("pins.channels")?;
-        let current_channels = crate::fs::resolve_symlink_utf8(profile.clone())?;
+        tracing::debug!(?channels, "Built channels");
+        let current_channels = fs_err::symlink_metadata(&profile).ok().and_then(|_| {
+            crate::fs::resolve_symlink_utf8(profile.clone())
+                .inspect_err(|err| {
+                    tracing::debug!(?profile, "Failed to resolve root profile symlink: {err}")
+                })
+                .ok()
+        });
 
-        if current_channels == channels {
+        if current_channels.as_deref() == Some(channels.as_path()) {
             tracing::info!("Channels are already set to {channels}");
             return Ok(());
         } else {
+            let current_channels = current_channels
+                .map(|path| path.to_string())
+                .unwrap_or_default();
             tracing::info!("Updating channels:\n- {current_channels}\n+ {channels}");
         }
 
