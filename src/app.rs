@@ -237,22 +237,28 @@ impl App {
     pub fn build_packages(&self) -> miette::Result<Utf8PathBuf> {
         tracing::info!("Building profile packages");
 
-        let old_profile = self.get_profile_store_path()?;
-        let old_profile_drv = {
-            match self.nix.derivation_info(&old_profile) {
-                Ok(drv) => Some(drv),
-                Err(err) => {
+        let old_profile = self
+            .get_profile_store_path()
+            .inspect_err(|err| tracing::debug!("Failed to resolve {:?}: {err}", self.nix_profile))
+            .inspect(|old_profile| tracing::debug!(?old_profile, "Resolved Nix profile"))
+            .ok();
+        tracing::debug!(?old_profile, "Resolved old profile");
+        let old_profile_drv = old_profile.as_deref().and_then(|old_profile| {
+            self.nix
+                .derivation_info(old_profile)
+                .inspect_err(|err| {
                     tracing::warn!(
                         "Failed to get derivation info for old profile {old_profile}:\n{err}"
-                    );
-                    None
-                }
-            }
-        };
-        tracing::debug!(?old_profile, "Resolved Nix profile");
+                    )
+                })
+                .ok()
+        });
+        tracing::debug!(?old_profile_drv, "Resolved old profile .drv");
 
         let new_profile: Utf8PathBuf = self.eval_npingler_attr("packages", None)?;
+        tracing::debug!(?new_profile, "Resolved new profile");
         let new_profile_drv = self.nix.derivation_info(&new_profile)?;
+        tracing::debug!(?new_profile_drv, "Resolved new profile .drv");
 
         if let Some(diff_derivations_command) = self.config.diff_derivations()?
             && let Some(command) = diff_derivations_command.first()
@@ -284,10 +290,12 @@ impl App {
             }
         }
 
-        if old_profile.as_path() == new_profile.as_path() {
+        if old_profile.as_deref() == Some(new_profile.as_path()) {
             tracing::info!("No changes, profile already up to date");
-        } else if let Err(err) = self.diff_trees(Some(old_profile.as_path()), new_profile.as_path())
-        {
+        } else if let Err(err) = self.diff_trees(old_profile.as_deref(), new_profile.as_path()) {
+            let old_profile = old_profile
+                .map(|path| path.as_str().to_owned())
+                .unwrap_or_default();
             tracing::debug!("Failed to diff profiles {old_profile} -> {new_profile}:\n{err}");
         }
 
