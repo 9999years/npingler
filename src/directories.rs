@@ -1,5 +1,6 @@
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use command_error::CommandExt;
 use miette::Context;
 use miette::IntoDiagnostic;
 use miette::miette;
@@ -88,6 +89,20 @@ impl ProjectPaths {
 
     /// Get the path to the user's Nix profile, if it exists.
     pub fn nix_profile(&self, nix: &Nix) -> miette::Result<Utf8PathBuf> {
+        match self.nix_profile_inner(nix) {
+            Ok(path) => Ok(path),
+            Err(_) => {
+                if let Err(err) = nix.nix_env_command().arg("--version").output_checked() {
+                    tracing::warn!(
+                        "Running `nix-env --version` to initialize your `~/.nix-profile` failed:\n{err}"
+                    );
+                }
+                self.nix_profile_inner(nix)
+            }
+        }
+    }
+
+    fn nix_profile_inner(&self, nix: &Nix) -> miette::Result<Utf8PathBuf> {
         // I'm _pretty_ sure this does the same thing as upstream (minus the root profile
         // handling).
         //
