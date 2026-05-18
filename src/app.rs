@@ -312,8 +312,13 @@ impl App {
         };
 
         let diff = diff_trees::Diff::new(old.as_std_path(), new.as_std_path()).into_diagnostic()?;
+        // We have to display the diff to see if it's actually empty. See https://github.com/9999years/npingler/issues/68
+        let displayed_diff = format!(
+            "{}",
+            diff.display(diff_trees::DisplayDiffOpts::new().color(true))
+        );
 
-        if diff.is_empty() {
+        if displayed_diff.is_empty() {
             // Sometimes, the profile path changes, but no installed paths actually
             // change their contents. Instead of showing a blank diff, we list the old and new
             // profiles.
@@ -323,10 +328,7 @@ impl App {
                 format!("+ {new}").green(),
             );
         } else {
-            tracing::info!(
-                "Updated Nix profile:\n{}",
-                diff.display(diff_trees::DisplayDiffOpts::new().color(true))
-            );
+            tracing::info!("Updated Nix profile:\n{}", displayed_diff);
         }
 
         Ok(())
