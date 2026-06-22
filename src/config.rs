@@ -4,6 +4,7 @@ use miette::Context;
 use miette::IntoDiagnostic;
 use miette::miette;
 
+use crate::clap::ShellWords;
 use crate::cli::Args;
 use crate::cli::SwitchArgs;
 use crate::directories::ProjectPaths;
@@ -44,6 +45,41 @@ pub struct Profile {
     diff_derivations: Option<Vec<String>>,
 }
 
+#[derive(serde::Deserialize, Default, Debug, Clone)]
+pub struct NixConfig {
+    #[serde(default)]
+    extra_args: NixExtraArgs,
+}
+
+#[derive(serde::Deserialize, Default, Debug, Clone)]
+pub struct NixExtraArgs {
+    nix: Option<Vec<String>>,
+    #[serde(rename = "nix build")]
+    build: Option<Vec<String>>,
+    #[serde(rename = "nix eval")]
+    eval: Option<Vec<String>>,
+    #[serde(rename = "nix-env --set")]
+    nix_env_set: Option<Vec<String>>,
+}
+
+impl NixExtraArgs {
+    pub fn nix(&self) -> &[String] {
+        self.nix.as_deref().unwrap_or_default()
+    }
+
+    pub fn build(&self) -> &[String] {
+        self.build.as_deref().unwrap_or_default()
+    }
+
+    pub fn eval(&self) -> &[String] {
+        self.eval.as_deref().unwrap_or_default()
+    }
+
+    pub fn nix_env_set(&self) -> &[String] {
+        self.nix_env_set.as_deref().unwrap_or_default()
+    }
+}
+
 /// Configuration loaded from a file.
 #[derive(serde::Deserialize, Default)]
 pub struct ConfigFile {
@@ -56,6 +92,8 @@ pub struct ConfigFile {
     registry: Registry,
     #[serde(default)]
     channels: Channels,
+    #[serde(default)]
+    nix: NixConfig,
 }
 
 impl ConfigFile {
@@ -236,7 +274,44 @@ impl Config {
     }
 
     pub fn nix(&self) -> miette::Result<Nix> {
-        Nix::new()
+        fn massage_args(
+            cli: &Option<ShellWords>,
+            file: &Option<Vec<String>>,
+        ) -> Option<Vec<String>> {
+            cli.clone().map(|args| args.into()).or_else(|| file.clone())
+        }
+
+        Nix::new(NixExtraArgs {
+            nix: massage_args(
+                &self.switch_args.nix.extra_nix_args,
+                &self.file.nix.extra_args.nix,
+            ),
+            build: massage_args(
+                &self.switch_args.nix.extra_nix_build_args,
+                &self.file.nix.extra_args.build,
+            ),
+            eval: massage_args(
+                &self.switch_args.nix.extra_nix_eval_args,
+                &self.file.nix.extra_args.eval,
+            ),
+            nix_env_set: {
+                if let Some(args) = self.switch_args.profile.extra_switch_args.clone() {
+                    tracing::warn!(
+                        "--extra-switch-args is deprecated, use --extra-nix-env-set-args instead"
+                    );
+                    Some(args.into())
+                } else if let Some(args) = self.switch_args.nix.extra_nix_env_set_args.clone() {
+                    Some(args.into())
+                } else if let Some(args) = self.file.profile.extra_switch_args.clone() {
+                    tracing::warn!(
+                        "Config setting `profile.extra_switch_args` is deprecated, use `nix.extra_args.\"nix-env --set\"` instead"
+                    );
+                    Some(args)
+                } else {
+                    self.file.nix.extra_args.nix_env_set.clone()
+                }
+            },
+        })
     }
 
     pub fn channels_pin_root(&self) -> bool {
@@ -282,16 +357,6 @@ impl Config {
             .pin_registry_root
             .or(self.file.registry.pin_root)
             .unwrap_or(false)
-    }
-
-    pub fn profile_extra_switch_args(&self) -> Vec<String> {
-        self.switch_args
-            .profile
-            .extra_switch_args
-            .as_deref()
-            .cloned()
-            .or_else(|| self.file.profile.extra_switch_args.clone())
-            .unwrap_or_else(Default::default)
     }
 
     /// Write the default config file.

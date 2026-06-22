@@ -113,6 +113,9 @@ pub struct SwitchArgs {
 
     #[command(flatten)]
     pub channel: ChannelArgs,
+
+    #[command(flatten)]
+    pub nix: NixCommandArgs,
 }
 
 #[derive(Debug, Default, Clone, clap::Args)]
@@ -148,7 +151,7 @@ pub struct ProfileArgs {
 
     /// Shell-quoted extra arguments to pass to `nix-env --set ...` when switching to the new
     /// profile.
-    #[arg(long)]
+    #[arg(long, hide = true)]
     pub extra_switch_args: Option<ShellWords>,
 
     /// A command, like `nix-diff` or `nvd`, to use to diff derivations. This will be executed
@@ -175,6 +178,30 @@ pub struct LogArgs {
     /// Alias for `--log-filter=debug`.
     #[arg(short, long, global = true)]
     pub verbose: bool,
+}
+
+#[derive(Debug, Default, Clone, clap::Args)]
+#[clap(next_help_heading = "Nix command arg options")]
+pub struct NixCommandArgs {
+    /// Extra args for `nix` invocations.
+    ///
+    /// This is for all `nix` binary ("nix3") invocations, but does not apply to (e.g.) `nix-env`.
+    #[arg(long)]
+    pub extra_nix_args: Option<ShellWords>,
+
+    /// Extra args for `nix build` invocations.
+    ///
+    /// Note this is NOT for `nix-build`, which we do not invoke.
+    #[arg(long)]
+    pub extra_nix_build_args: Option<ShellWords>,
+
+    /// Extra args for `nix eval` invocations.
+    #[arg(long)]
+    pub extra_nix_eval_args: Option<ShellWords>,
+
+    /// Extra args for `nix-env --set` invocations.
+    #[arg(long)]
+    pub extra_nix_env_set_args: Option<ShellWords>,
 }
 
 impl Args {
