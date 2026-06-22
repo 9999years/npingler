@@ -50,12 +50,14 @@ struct UnknownRegistry {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct RegistryV2 {
-    flakes: Vec<RegistryEntryV2>,
+    // This is an Option<Vec<_>> because removing the last entry in a flake registry can leave you
+    // with "flakes: null"
+    flakes: Option<Vec<RegistryEntryV2>>,
 }
 
 impl RegistryV2 {
     pub fn id_to_path<'s>(&'s self, id: &str) -> Option<&'s Utf8Path> {
-        for flake in &self.flakes {
+        for flake in self.flakes.iter().flatten() {
             if let ReferenceV2::Indirect { id: current_id } = &flake.from
                 && current_id == id
             {
