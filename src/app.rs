@@ -469,7 +469,7 @@ impl App {
         let pins: NixPins = self.eval_npingler_attr("pins.pins", None)?;
 
         let registry = match self.nix.parse_registry(Nix::system_registry_path()) {
-            Ok(registry) => Some(registry),
+            Ok(registry) => registry,
             Err(error) => {
                 tracing::warn!("{error:?}");
                 None

@@ -1,4 +1,5 @@
 use std::collections::BTreeSet;
+use std::io::ErrorKind;
 use std::os::unix::process::CommandExt as _;
 use std::process::Command;
 use std::process::Output;
@@ -159,14 +160,21 @@ impl Nix {
         Utf8Path::new("/etc/nix/registry.json")
     }
 
-    pub fn parse_registry(&self, path: &Utf8Path) -> miette::Result<Registry> {
-        let contents = fs_err::read_to_string(path)
-            .into_diagnostic()
-            .wrap_err("Failed to read Flake registry")?;
+    pub fn parse_registry(&self, path: &Utf8Path) -> miette::Result<Option<Registry>> {
+        match fs_err::read_to_string(path) {
+            Err(e) if e.kind() == ErrorKind::NotFound => Ok(None),
+            contents => {
+                let contents = contents
+                    .into_diagnostic()
+                    .wrap_err("Failed to read Flake registry")?;
 
-        serde_json::from_str(&contents)
-            .into_diagnostic()
-            .wrap_err("Failed to deserialize Flake registry")
+                Ok(Some(
+                    serde_json::from_str(&contents)
+                        .into_diagnostic()
+                        .wrap_err("Failed to deserialize Flake registry")?,
+                ))
+            }
+        }
     }
 
     // `nix derivation show` wrapper.
