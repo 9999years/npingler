@@ -255,10 +255,24 @@ impl App {
         });
         tracing::debug!(?old_profile_drv, "Resolved old profile .drv");
 
+        if let Some(old_profile) = &old_profile {
+            tracing::info!(
+                out=%old_profile,
+                drv=old_profile_drv.as_ref().map(|drv| drv.path.as_str()).unwrap_or("<unknown>"),
+                "Resolved current profile"
+            );
+        }
+
         let new_profile: Utf8PathBuf = self.eval_npingler_attr("packages", None)?;
         tracing::debug!(?new_profile, "Resolved new profile");
         let new_profile_drv = self.nix.derivation_info(&new_profile)?;
         tracing::debug!(?new_profile_drv, "Resolved new profile .drv");
+
+        tracing::info!(
+            out=%new_profile,
+            drv=%new_profile_drv.path,
+            "Resolved new profile"
+        );
 
         if let Some(diff_derivations_command) = self.config.diff_derivations()?
             && let Some(command) = diff_derivations_command.first()
@@ -277,7 +291,9 @@ impl App {
                 .status_checked();
         }
 
-        if !new_profile.exists() {
+        if new_profile.exists() {
+            tracing::info!("New profile is already built");
+        } else {
             match self.config.run_mode() {
                 crate::config::RunMode::Dry => {
                     tracing::info!("Would build: {new_profile} from {}", new_profile_drv.path);
