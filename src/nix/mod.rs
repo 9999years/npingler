@@ -96,12 +96,7 @@ impl Nix {
     pub fn build(&self, args: &[&str]) -> miette::Result<BTreeSet<Utf8PathBuf>> {
         let stdout = self
             .nix_command()
-            .args([
-                "build",
-                "--print-build-logs",
-                "--no-link",
-                "--print-out-paths",
-            ])
+            .args(["build", "--no-link", "--print-out-paths"])
             .args(self.extra_args.build())
             .args(args)
             .stderr(Stdio::inherit())
