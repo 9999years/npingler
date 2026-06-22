@@ -366,7 +366,7 @@ impl App {
 
         let mut command = self.nix_env_command(Some(self.nix_profile.clone()));
         command.args(["--set", new_profile.as_str()]);
-        command.args(self.config.profile_extra_switch_args()?);
+        command.args(self.config.profile_extra_switch_args());
 
         match self.config.run_mode() {
             crate::config::RunMode::Dry => {

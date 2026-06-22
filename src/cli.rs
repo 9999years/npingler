@@ -1,5 +1,6 @@
 use camino::Utf8PathBuf;
 
+use crate::clap::ShellWords;
 use crate::directories::ProjectPaths;
 
 /// A friendly Nix profile manager.
@@ -148,7 +149,7 @@ pub struct ProfileArgs {
     /// Shell-quoted extra arguments to pass to `nix-env --set ...` when switching to the new
     /// profile.
     #[arg(long)]
-    pub extra_switch_args: Option<String>,
+    pub extra_switch_args: Option<ShellWords>,
 
     /// A command, like `nix-diff` or `nvd`, to use to diff derivations. This will be executed
     /// to display a diff of the changes being made to your profile before building it.

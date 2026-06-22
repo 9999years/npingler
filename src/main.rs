@@ -1,6 +1,7 @@
-use clap::Parser;
+use ::clap::Parser;
 
 mod app;
+mod clap;
 mod cli;
 mod config;
 mod directories;
