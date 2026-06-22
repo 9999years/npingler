@@ -134,27 +134,6 @@ impl App {
         self.config.command()
     }
 
-    #[instrument(level = "debug", skip(self))]
-    fn nix_env_command(&self, profile: Option<Utf8PathBuf>) -> Command {
-        let mut command = self.nix.nix_env_command();
-        if let Some(profile) = profile {
-            command.arg("--profile");
-            command.arg(profile.as_str());
-        }
-        command
-    }
-
-    #[instrument(level = "debug", skip(self))]
-    fn sudo_nix_env_command(&self, profile: Option<Utf8PathBuf>) -> Command {
-        let mut command = self.nix.sudo_nix_env_command();
-        // TODO: Duplication with `nix_env_command`.
-        if let Some(profile) = profile {
-            command.arg("--profile");
-            command.arg(profile.as_str());
-        }
-        command
-    }
-
     fn npingler_attr(&self, attr: &str) -> String {
         format!("npingler.{}.{}", self.hostname, attr)
     }
@@ -364,9 +343,9 @@ impl App {
                 .wrap_err("Failed to create missing Nix profile directory")?;
         }
 
-        let mut command = self.nix_env_command(Some(self.nix_profile.clone()));
-        command.args(["--set", new_profile.as_str()]);
-        command.args(self.config.profile_extra_switch_args());
+        let mut command = self
+            .nix
+            .nix_env_set_command(&self.nix_profile, &new_profile);
 
         match self.config.run_mode() {
             crate::config::RunMode::Dry => {
@@ -464,9 +443,7 @@ impl App {
             tracing::info!("Updating channels:\n- {current_channels}\n+ {channels}");
         }
 
-        let mut command = self.sudo_nix_env_command(Some(profile));
-        command.arg("--set");
-        command.arg(&channels);
+        let mut command = self.nix.sudo_nix_env_set_command(&profile, &channels);
 
         match self.config.run_mode() {
             crate::config::RunMode::Dry => {

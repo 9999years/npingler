@@ -22,21 +22,25 @@ mod derivation;
 pub use derivation::Derivation;
 pub use derivation::Derivations;
 
+use crate::config::NixExtraArgs;
+
 #[derive(Debug, Clone)]
 pub struct Nix {
     /// Path to the `nix` binary.
     nix_program: Utf8PathBuf,
     /// Path to the `nix-env` binary.
     nix_env_program: Utf8PathBuf,
+    extra_args: NixExtraArgs,
 }
 
 impl Nix {
-    pub fn new() -> miette::Result<Self> {
+    pub fn new(extra_args: NixExtraArgs) -> miette::Result<Self> {
         let nix_program = crate::which::which_global("nix")?;
         let nix_env_program = crate::which::which_global("nix-env")?;
         Ok(Self {
             nix_program,
             nix_env_program,
+            extra_args,
         })
     }
 
@@ -44,6 +48,7 @@ impl Nix {
         let mut command = Command::new(&self.nix_program);
         command.arg("--extra-experimental-features");
         command.arg("nix-command");
+        command.args(self.extra_args.nix());
         command
     }
 
@@ -55,15 +60,31 @@ impl Nix {
         command
     }
 
-    pub fn nix_env_command(&self) -> Command {
+    fn nix_env_command(&self) -> Command {
         let mut command = Command::new(&self.nix_env_program);
         command.arg0("nix-env");
         command
     }
 
-    pub fn sudo_nix_env_command(&self) -> Command {
+    pub fn nix_env_set_command(&self, profile_link: &Utf8Path, new_profile: &Utf8Path) -> Command {
+        let mut command = self.nix_env_command();
+        command.args(self.extra_args.nix_env_set());
+        command.args([
+            "--profile",
+            profile_link.as_str(),
+            "--set",
+            new_profile.as_str(),
+        ]);
+        command
+    }
+
+    pub fn sudo_nix_env_set_command(
+        &self,
+        profile_link: &Utf8Path,
+        new_profile: &Utf8Path,
+    ) -> Command {
         let mut command = Command::new("sudo");
-        let inner = self.nix_env_command();
+        let inner = self.nix_env_set_command(profile_link, new_profile);
         command.arg(inner.get_program());
         command.args(inner.get_args());
         command
@@ -80,6 +101,7 @@ impl Nix {
                 "--no-link",
                 "--print-out-paths",
             ])
+            .args(self.extra_args.build())
             .args(args)
             .stderr(Stdio::inherit())
             .output_checked_utf8()
@@ -98,6 +120,7 @@ impl Nix {
         command.arg("eval");
         command.arg("--json");
         command.args(args);
+        command.args(self.extra_args.eval());
 
         command
             .output_checked_as(|context: OutputContext<Output>| {

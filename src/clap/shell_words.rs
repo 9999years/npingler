@@ -8,8 +8,14 @@ use clap::error::ErrorKind;
 /// Shell-quoted arguments.
 ///
 /// Specified on the command-line as one string, parsed as a `Vec<String>`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ShellWords(Vec<String>);
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct ShellWords(pub Vec<String>);
+
+impl From<ShellWords> for Vec<String> {
+    fn from(value: ShellWords) -> Self {
+        value.0
+    }
+}
 
 impl AsRef<Vec<String>> for ShellWords {
     fn as_ref(&self) -> &Vec<String> {

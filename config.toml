@@ -5,3 +5,7 @@
 # registry.pin = false
 # registry.pin_root = false
 # channels.pin = false
+# nix.extra_args.nix = []
+# nix.extra_args."nix build" = []
+# nix.extra_args."nix eval" = []
+# nix.extra_args."nix-env --set" = []
