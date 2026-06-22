@@ -213,7 +213,7 @@ impl App {
     }
 
     #[instrument(level = "debug", skip(self))]
-    pub fn build_packages(&self) -> miette::Result<Utf8PathBuf> {
+    pub fn build_packages(&self) -> miette::Result<(Option<Utf8PathBuf>, Utf8PathBuf)> {
         tracing::info!("Building profile packages");
 
         let old_profile = self
@@ -289,20 +289,19 @@ impl App {
             tracing::info!("No changes, profile already up to date");
         } else if let Err(err) = self.diff_trees(old_profile.as_deref(), new_profile.as_path()) {
             let old_profile = old_profile
+                .clone()
                 .map(|path| path.as_str().to_owned())
                 .unwrap_or_default();
             tracing::debug!("Failed to diff profiles {old_profile} -> {new_profile}:\n{err}");
         }
 
-        Ok(new_profile)
+        Ok((old_profile, new_profile))
     }
 
     fn diff_trees(&self, old: Option<&Utf8Path>, new: &Utf8Path) -> miette::Result<()> {
+        tracing::info!("Built Nix profile: {new}");
         let old = match old {
-            None => {
-                tracing::info!("Updated Nix profile to {new}");
-                return Ok(());
-            }
+            None => return Ok(()),
             Some(old) => old,
         };
 
@@ -315,15 +314,10 @@ impl App {
 
         if displayed_diff.is_empty() {
             // Sometimes, the profile path changes, but no installed paths actually
-            // change their contents. Instead of showing a blank diff, we list the old and new
-            // profiles.
-            tracing::info!(
-                "Updated Nix profile:\n{}\n{}",
-                format!("- {old}").red(),
-                format!("+ {new}").green(),
-            );
+            // change their contents.
+            tracing::info!("No changes from current profile");
         } else {
-            tracing::info!("Updated Nix profile:\n{}", displayed_diff);
+            tracing::info!("Changes from current profile:\n{}", displayed_diff);
         }
 
         Ok(())
@@ -331,9 +325,17 @@ impl App {
 
     #[instrument(level = "debug", skip(self))]
     pub fn ensure_packages(&self) -> miette::Result<()> {
-        let new_profile = self.build_packages()?;
+        let (old_profile, new_profile) = self.build_packages()?;
 
-        tracing::info!("Setting profile to {new_profile}");
+        match old_profile {
+            Some(old) if old == new_profile => return Ok(()),
+            Some(old) => tracing::info!(
+                "Updating profile:\n{}\n{}",
+                format!("- {old}").red(),
+                format!("+ {new_profile}").green()
+            ),
+            None => tracing::info!("Updating profile:\n{}", format!("+ {new_profile}").green()),
+        }
 
         if let Some(profile_dir) = self.nix_profile.parent()
             && fs_err::symlink_metadata(profile_dir).is_err()
