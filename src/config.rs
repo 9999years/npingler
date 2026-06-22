@@ -284,18 +284,14 @@ impl Config {
             .unwrap_or(false)
     }
 
-    pub fn profile_extra_switch_args(&self) -> miette::Result<Vec<String>> {
+    pub fn profile_extra_switch_args(&self) -> Vec<String> {
         self.switch_args
             .profile
             .extra_switch_args
             .as_deref()
-            .map(|args| {
-                shell_words::split(args)
-                    .into_diagnostic()
-                    .wrap_err_with(|| format!("Failed to shell unquote: {args}"))
-            })
-            .or_else(|| self.file.profile.extra_switch_args.clone().map(Ok))
-            .unwrap_or_else(|| Ok(Default::default()))
+            .cloned()
+            .or_else(|| self.file.profile.extra_switch_args.clone())
+            .unwrap_or_else(Default::default)
     }
 
     /// Write the default config file.
