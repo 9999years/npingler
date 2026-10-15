@@ -6,6 +6,7 @@ use miette::miette;
 
 use crate::clap::ShellWords;
 use crate::cli::Args;
+use crate::cli::BuildArgs;
 use crate::cli::SwitchArgs;
 use crate::directories::ProjectPaths;
 use crate::format_bulleted_list;
@@ -118,6 +119,7 @@ pub struct Config {
     project_paths: ProjectPaths,
     file: ConfigFile,
     args: Args,
+    build_args: BuildArgs,
     switch_args: SwitchArgs,
 }
 
@@ -127,15 +129,22 @@ impl Config {
         let paths = args.config_paths(&project_paths)?;
 
         // This is really silly.
-        let switch_args = match &args.command {
-            crate::cli::Command::Update { switch_args, .. } => switch_args.clone(),
-            crate::cli::Command::Switch { switch_args } => switch_args.clone(),
-            crate::cli::Command::Config(_) => SwitchArgs::default(),
-            crate::cli::Command::Build { switch_args } => switch_args.clone(),
+        let (build_args, switch_args) = match &args.command {
+            crate::cli::Command::Update { build_args, .. } => {
+                (build_args.clone(), SwitchArgs::default())
+            }
+            crate::cli::Command::Switch {
+                build_args,
+                switch_args,
+            } => (build_args.clone(), switch_args.clone()),
+            crate::cli::Command::Config(_) => Default::default(),
+            crate::cli::Command::Build { build_args } => {
+                (build_args.clone(), SwitchArgs::default())
+            }
             crate::cli::Command::Util(util_command) => match util_command {
-                crate::cli::UtilCommand::GenerateCompletions { .. } => SwitchArgs::default(),
+                crate::cli::UtilCommand::GenerateCompletions { .. } => Default::default(),
                 #[cfg(feature = "clap_mangen")]
-                crate::cli::UtilCommand::GenerateManPages { .. } => SwitchArgs::default(),
+                crate::cli::UtilCommand::GenerateManPages { .. } => Default::default(),
             },
         };
 
@@ -153,6 +162,7 @@ impl Config {
                     project_paths,
                     file,
                     args,
+                    build_args,
                     switch_args,
                 });
             }
@@ -164,6 +174,7 @@ impl Config {
             project_paths,
             file: Default::default(),
             args,
+            build_args,
             switch_args,
         })
     }
@@ -253,7 +264,7 @@ impl Config {
     }
 
     pub fn hostname(&self) -> miette::Result<String> {
-        match &self.switch_args.hostname {
+        match &self.build_args.hostname {
             Some(hostname) => Ok(hostname.clone()),
             None => gethostname::gethostname()
                 .into_string()
@@ -262,7 +273,7 @@ impl Config {
     }
 
     pub fn nix_profile(&self, nix: &Nix) -> miette::Result<Utf8PathBuf> {
-        if let Some(profile) = self.switch_args.profile.profile.as_deref() {
+        if let Some(profile) = self.build_args.profile.profile.as_deref() {
             return Ok(profile.to_path_buf());
         }
 
@@ -283,24 +294,24 @@ impl Config {
 
         Nix::new(NixExtraArgs {
             nix: massage_args(
-                &self.switch_args.nix.extra_nix_args,
+                &self.build_args.nix.extra_nix_args,
                 &self.file.nix.extra_args.nix,
             ),
             build: massage_args(
-                &self.switch_args.nix.extra_nix_build_args,
+                &self.build_args.nix.extra_nix_build_args,
                 &self.file.nix.extra_args.build,
             ),
             eval: massage_args(
-                &self.switch_args.nix.extra_nix_eval_args,
+                &self.build_args.nix.extra_nix_eval_args,
                 &self.file.nix.extra_args.eval,
             ),
             nix_env_set: {
-                if let Some(args) = self.switch_args.profile.extra_switch_args.clone() {
+                if let Some(args) = self.build_args.profile.extra_switch_args.clone() {
                     tracing::warn!(
                         "--extra-switch-args is deprecated, use --extra-nix-env-set-args instead"
                     );
                     Some(args.into())
-                } else if let Some(args) = self.switch_args.nix.extra_nix_env_set_args.clone() {
+                } else if let Some(args) = self.build_args.nix.extra_nix_env_set_args.clone() {
                     Some(args.into())
                 } else if let Some(args) = self.file.profile.extra_switch_args.clone() {
                     tracing::warn!(
@@ -390,7 +401,7 @@ impl Config {
 
     pub fn diff_derivations(&self) -> miette::Result<Option<Vec<String>>> {
         Ok(self
-            .switch_args
+            .build_args
             .profile
             .diff_derivations
             .as_deref()

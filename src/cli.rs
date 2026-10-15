@@ -40,6 +40,9 @@ pub enum Command {
         no_switch: bool,
 
         #[command(flatten)]
+        build_args: BuildArgs,
+
+        #[command(flatten)]
         switch_args: SwitchArgs,
     },
 
@@ -47,13 +50,16 @@ pub enum Command {
     #[command(alias = "install")]
     Switch {
         #[command(flatten)]
+        build_args: BuildArgs,
+
+        #[command(flatten)]
         switch_args: SwitchArgs,
     },
 
     /// Build the current profile but don't switch to it.
     Build {
         #[command(flatten)]
-        switch_args: SwitchArgs,
+        build_args: BuildArgs,
     },
 
     // TODO: `pin-channels` and `pin-registry` commands would be nice, but the defaults (not
@@ -98,7 +104,7 @@ pub enum UtilCommand {
 }
 
 #[derive(Debug, Default, Clone, clap::Args)]
-pub struct SwitchArgs {
+pub struct BuildArgs {
     /// The hostname to build the configuration for.
     ///
     /// This corresponds to the `npingler.${hostname}` output attribute in your flake.
@@ -109,13 +115,16 @@ pub struct SwitchArgs {
     pub profile: ProfileArgs,
 
     #[command(flatten)]
+    pub nix: NixCommandArgs,
+}
+
+#[derive(Debug, Default, Clone, clap::Args)]
+pub struct SwitchArgs {
+    #[command(flatten)]
     pub registry: RegistryArgs,
 
     #[command(flatten)]
     pub channel: ChannelArgs,
-
-    #[command(flatten)]
-    pub nix: NixCommandArgs,
 }
 
 #[derive(Debug, Default, Clone, clap::Args)]
