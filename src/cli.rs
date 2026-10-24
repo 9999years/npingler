@@ -1,4 +1,8 @@
+use std::error::Error;
+use std::fmt::Display;
+
 use camino::Utf8PathBuf;
+use clap::builder::{ValueParser, ValueParserFactory};
 
 use crate::clap::ShellWords;
 use crate::directories::ProjectPaths;
@@ -23,7 +27,7 @@ pub struct Args {
     #[command(flatten)]
     pub log: LogArgs,
 
-    /// Don't actually change the configuration.
+    /// Don't actually build anything or change the configuration.
     #[arg(long, alias = "dry-run", global = true)]
     pub dry: bool,
 
@@ -54,6 +58,15 @@ pub enum Command {
     Build {
         #[command(flatten)]
         switch_args: SwitchArgs,
+    },
+
+    /// Show differences between profiles.
+    Diff {
+        #[command(flatten)]
+        switch_args: SwitchArgs,
+
+        #[command(flatten)]
+        diff_args: DiffArgs,
     },
 
     // TODO: `pin-channels` and `pin-registry` commands would be nice, but the defaults (not
@@ -160,6 +173,94 @@ pub struct ProfileArgs {
     /// This may contain shell-quoted arguments.
     #[arg(long)]
     pub diff_derivations: Option<String>,
+}
+
+/// A reference to a nix profile.
+#[derive(Debug, Clone)]
+pub enum ProfileSpec {
+    /// Use the currently installed profile. Affected by `--profile` / `NIX_PROFILE`.
+    Current,
+
+    /// Use the specified profile generation (as in `nix env --list-generations`).
+    Generation(i32),
+
+    /// Use the profile in the npingler configuration for the given hostname, defaulting to the
+    /// `--hostname` arg if given, or the current hostname.
+    Config(Option<String>),
+}
+
+impl Display for ProfileSpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProfileSpec::Current => write!(f, "current profile"),
+            ProfileSpec::Generation(generation) => write!(f, "profile generation {generation}"),
+            ProfileSpec::Config(None) => write!(f, "npingler configuration"),
+            ProfileSpec::Config(Some(hostname)) => {
+                write!(f, "npingler configuration for {hostname}")
+            }
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+struct ProfileSpecParseError;
+
+impl Display for ProfileSpecParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "unable to parse profile; expected an integer, \"current\", \"config\", or \"config.{{hostname}}\""
+        )
+    }
+}
+
+impl Error for ProfileSpecParseError {}
+
+fn parse_profile_to_diff(input: &str) -> Result<ProfileSpec, ProfileSpecParseError> {
+    if let Ok(int) = input.parse() {
+        return Ok(ProfileSpec::Generation(int));
+    };
+
+    if input == "current" {
+        return Ok(ProfileSpec::Current);
+    }
+
+    match input.strip_prefix("config") {
+        Some("") => return Ok(ProfileSpec::Config(None)),
+        Some(rest) => match rest.strip_prefix(".") {
+            Some(hostname) if !hostname.is_empty() => {
+                return Ok(ProfileSpec::Config(Some(hostname.to_string())));
+            }
+            _ => (),
+        },
+        _ => (),
+    };
+
+    Err(ProfileSpecParseError)
+}
+
+impl ValueParserFactory for ProfileSpec {
+    type Parser = ValueParser;
+
+    fn value_parser() -> Self::Parser {
+        ValueParser::new(parse_profile_to_diff)
+    }
+}
+
+#[derive(Debug, Default, Clone, clap::Args)]
+#[clap(next_help_heading = "Diff options")]
+pub struct DiffArgs {
+    /// The profile to compare from. Defaults to the currently installed profile (or the profile
+    /// specified by --profile / NIX_PROFILE, if any).
+    ///
+    /// If the previous profile doesn't exist and --from wasn't explicitly provided, we
+    /// show the diff between --to and an empty profile.
+    #[arg(long)]
+    pub from: Option<ProfileSpec>,
+
+    /// The profile to compare to. Defaults to the profile specified by your npingler configuration.
+    #[arg(long)]
+    pub to: Option<ProfileSpec>,
 }
 
 #[derive(Debug, Clone, clap::Args)]

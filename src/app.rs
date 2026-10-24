@@ -14,9 +14,12 @@ use tracing::instrument;
 
 use crate::cli;
 use crate::cli::Args;
+use crate::cli::DiffArgs;
+use crate::cli::ProfileSpec;
 use crate::config::Config;
 use crate::format_bulleted_list;
 use crate::fs::resolve_symlink_utf8;
+use crate::nix::Derivation;
 use crate::nix::Nix;
 use crate::nix::Registry;
 use crate::pins::NixPins;
@@ -27,6 +30,31 @@ pub struct App {
     nix_profile: Utf8PathBuf,
     hostname: String,
     nix: Nix,
+}
+
+#[derive(Debug, Clone)]
+struct ResolvedProfile {
+    /// The spec that this profile was originally resolved from.
+    spec: ProfileSpec,
+    /// The store path of the profile. A resolved profile may or may not already have been built
+    /// (i.e. this path may or may not already exist).
+    path: Utf8PathBuf,
+    /// If true, this profile may need to be built; if false, we can safely assume it has already
+    /// been built.
+    may_need_building: bool,
+    derivation: Derivation,
+}
+
+#[derive(Debug, Clone)]
+enum DiffResult {
+    /// There's no previous profile to compare with - for example, when someone is running npingler
+    /// for the very first time and ~/.nix-profile doesn't exist yet.
+    NoPreviousProfile,
+    /// Either the profile paths are the same, or the profile trees are the same.
+    NoChanges,
+    /// There are changes. The String contains a human-readable representation of them (which
+    /// may ANSI escape codes) intended for printing to the console.
+    Changes(String),
 }
 
 impl App {
@@ -98,6 +126,9 @@ impl App {
                     cli::Command::Build { .. } => {
                         app.build_packages()?;
                     }
+                    cli::Command::Diff { diff_args, .. } => {
+                        app.diff(diff_args)?;
+                    }
                     cli::Command::Config(config_command) => match config_command {
                         cli::ConfigCommand::Init { .. } => unreachable!(),
                     },
@@ -162,11 +193,10 @@ impl App {
     }
 
     #[instrument(level = "debug", skip(self))]
-    fn eval_npingler_attr<T>(&self, attr: &str, apply: Option<&str>) -> miette::Result<T>
+    fn eval<T>(&self, attr: &str, apply: Option<&str>) -> miette::Result<T>
     where
         T: DeserializeOwned,
     {
-        let attr = self.npingler_attr(attr);
         let mut args = vec!["--file", &self.nix_file.as_str()];
 
         if let Some(expr) = apply {
@@ -174,9 +204,17 @@ impl App {
             args.push(expr);
         }
 
-        args.push(&attr);
+        args.push(attr);
 
         self.nix.eval(&args)
+    }
+
+    #[instrument(level = "debug", skip(self))]
+    fn eval_npingler_attr<T>(&self, attr: &str, apply: Option<&str>) -> miette::Result<T>
+    where
+        T: DeserializeOwned,
+    {
+        self.eval(&self.npingler_attr(attr), apply)
     }
 
     #[instrument(level = "debug", skip(self))]
@@ -212,51 +250,98 @@ impl App {
         resolve_symlink_utf8(self.nix_profile.clone())
     }
 
+    fn nix_profile_generation(&self, generation: i32) -> Utf8PathBuf {
+        format!("{}-{}-link", self.nix_profile, generation).into()
+    }
+
+    fn get_profile_generation_store_path(&self, generation: i32) -> miette::Result<Utf8PathBuf> {
+        resolve_symlink_utf8(self.nix_profile_generation(generation))
+    }
+
     #[instrument(level = "debug", skip(self))]
     pub fn build_packages(&self) -> miette::Result<(Option<Utf8PathBuf>, Utf8PathBuf)> {
         tracing::info!("Building profile packages");
 
         let old_profile = self
-            .get_profile_store_path()
-            .inspect_err(|err| tracing::debug!("Failed to resolve {:?}: {err}", self.nix_profile))
-            .inspect(|old_profile| tracing::debug!(?old_profile, "Resolved Nix profile"))
+            .resolve_profile(ProfileSpec::Current, Some("current profile"))
             .ok();
-        tracing::debug!(?old_profile, "Resolved old profile");
-        let old_profile_drv = old_profile.as_deref().and_then(|old_profile| {
-            self.nix
-                .derivation_info(old_profile)
-                .inspect_err(|err| {
-                    tracing::warn!(
-                        "Failed to get derivation info for old profile {old_profile}:\n{err}"
-                    )
-                })
-                .ok()
-        });
-        tracing::debug!(?old_profile_drv, "Resolved old profile .drv");
 
-        if let Some(old_profile) = &old_profile {
-            tracing::info!(
-                out=%old_profile,
-                drv=old_profile_drv.as_ref().map(|drv| drv.path.as_str()).unwrap_or("<unknown>"),
-                "Resolved current profile"
-            );
-        }
+        let new_profile = self.resolve_profile(ProfileSpec::Config(None), Some("new profile"))?;
 
-        let new_profile: Utf8PathBuf = self.eval_npingler_attr("packages", None)?;
-        tracing::debug!(?new_profile, "Resolved new profile");
-        let new_profile_drv = self.nix.derivation_info(&new_profile)?;
-        tracing::debug!(?new_profile_drv, "Resolved new profile .drv");
+        self.diff_derivations(old_profile.as_ref(), &new_profile)?;
 
-        tracing::info!(
-            out=%new_profile,
-            drv=%new_profile_drv.path,
-            "Resolved new profile"
-        );
+        self.ensure_profile(&new_profile, "new profile")?;
 
+        let old_profile_path = old_profile.as_ref().map(|p| p.path.as_path());
+        match self.diff_trees(old_profile_path, &new_profile.path) {
+            Err(err) => {
+                let old_profile_path = match old_profile_path {
+                    Some(path) => path.as_str(),
+                    None => "[none]",
+                };
+                tracing::debug!(
+                    "Failed to diff profiles {old_profile_path} -> {}:\n{err}",
+                    new_profile.path
+                );
+            }
+            Ok(DiffResult::NoPreviousProfile) => (),
+            Ok(DiffResult::NoChanges) => {
+                tracing::info!("No changes, profile already up to date");
+            }
+            Ok(DiffResult::Changes(diff)) => {
+                tracing::info!("Changes from current profile:\n{}", diff);
+            }
+        };
+
+        Ok((old_profile.map(|o| o.path), new_profile.path))
+    }
+
+    pub fn diff(&self, diff_args: &DiffArgs) -> miette::Result<()> {
+        // If --from was explicitly specified, require it to exist. Otherwise, use the current
+        // profile, or None if there is no current profile.
+        let old_profile = match diff_args.from {
+            None => self.resolve_profile(ProfileSpec::Current, None).ok(),
+            Some(ref from_profile) => Some(self.resolve_profile(from_profile.clone(), None)?),
+        };
+
+        let new_profile = self.resolve_profile(
+            diff_args.to.clone().unwrap_or(ProfileSpec::Config(None)),
+            None,
+        )?;
+        let new_profile_name = new_profile.spec.to_string();
+
+        self.diff_derivations(old_profile.as_ref(), &new_profile)?;
+
+        old_profile
+            .as_ref()
+            .map(|o| self.ensure_profile(o, &o.spec.to_string()))
+            .transpose()?;
+        self.ensure_profile(&new_profile, &new_profile_name)?;
+
+        let old_profile_path = old_profile.as_ref().map(|p| p.path.as_path());
+
+        match self.diff_trees(old_profile_path, &new_profile.path)? {
+            DiffResult::NoPreviousProfile => (),
+            DiffResult::NoChanges => {
+                tracing::info!("No changes");
+            }
+            DiffResult::Changes(diff) => {
+                tracing::info!("Changes:\n{}", diff);
+            }
+        };
+
+        Ok(())
+    }
+
+    fn diff_derivations(
+        &self,
+        old_profile: Option<&ResolvedProfile>,
+        new_profile: &ResolvedProfile,
+    ) -> miette::Result<()> {
         if let Some(diff_derivations_command) = self.config.diff_derivations()?
             && let Some(command) = diff_derivations_command.first()
-            && let Some(old_profile_drv) = &old_profile_drv
-            && old_profile_drv != &new_profile_drv
+            && let Some(old_profile) = &old_profile
+            && old_profile.derivation != new_profile.derivation
         {
             // Don't care... but use `status_checked` anyways to get logs :)
             let mut command = Command::new(command);
@@ -266,44 +351,112 @@ impl App {
             }
 
             let _ = command
-                .args([old_profile_drv.path.as_str(), new_profile_drv.path.as_str()])
+                .args([
+                    old_profile.derivation.path.as_str(),
+                    new_profile.derivation.path.as_str(),
+                ])
                 .status_checked();
         }
 
-        if new_profile.exists() {
-            tracing::info!("New profile is already built");
+        Ok(())
+    }
+
+    fn resolve_profile(
+        &self,
+        profile_spec: ProfileSpec,
+        profile_name: Option<&str>,
+    ) -> miette::Result<ResolvedProfile> {
+        let (path, may_need_building) = match profile_spec {
+            ProfileSpec::Current => (
+                self.get_profile_store_path()
+                    .inspect_err(|err| {
+                        tracing::debug!("Failed to resolve {:?}: {err}", self.nix_profile)
+                    })
+                    .inspect(|profile| tracing::debug!(?profile, "Resolved Nix profile"))?,
+                false,
+            ),
+            ProfileSpec::Generation(generation) => (
+                self.get_profile_generation_store_path(generation)
+                    .inspect_err(|err| {
+                        tracing::debug!(
+                            "Failed to resolve {:?}: {err}",
+                            self.nix_profile_generation(generation)
+                        )
+                    })
+                    .inspect(|profile| {
+                        tracing::debug!(?profile, "Resolved Nix profile generation {generation}")
+                    })?,
+                false,
+            ),
+            ProfileSpec::Config(ref hostname) => {
+                let hostname = match hostname {
+                    Some(h) => h.clone(),
+                    None => self.config.hostname()?,
+                };
+                (
+                    self.eval(&format!("npingler.{}.packages", hostname), None)?,
+                    true,
+                )
+            }
+        };
+        let derivation = self.nix.derivation_info(&path)?;
+        let profile_name = match profile_name {
+            Some(name) => name.to_string(),
+            None => profile_spec.to_string(),
+        };
+        tracing::info!(
+            out=%path,
+            drv=%derivation.path,
+            "Resolved {profile_name}"
+        );
+        tracing::debug!(?derivation, "Resolved profile derivation");
+        Ok(ResolvedProfile {
+            spec: profile_spec,
+            path,
+            may_need_building,
+            derivation,
+        })
+    }
+
+    // TODO: should this function return a value that tells the caller if the profile is actually
+    // built (since with --dry, it might not be)?
+    fn ensure_profile(&self, profile: &ResolvedProfile, profile_name: &str) -> miette::Result<()> {
+        if !profile.may_need_building {
+            return Ok(());
+        };
+
+        if profile.path.exists() {
+            tracing::info!("{} is already built", first_to_upper(profile_name));
         } else {
             match self.config.run_mode() {
                 crate::config::RunMode::Dry => {
-                    tracing::info!("Would build: {new_profile} from {}", new_profile_drv.path);
+                    tracing::info!(
+                        "Would build: {} from {}",
+                        profile.path,
+                        profile.derivation.path
+                    );
                 }
                 crate::config::RunMode::Wet => {
                     self.nix
-                        .build(&[&format!("{}^out", new_profile_drv.path.as_str())])
-                        .wrap_err("Failed to build new profile")?;
+                        .build(&[&format!("{}^out", profile.derivation.path.as_str())])
+                        .wrap_err(format!("Failed to build {profile_name}"))?;
+                    tracing::info!("Built {}: {}", profile_name, profile.path);
                 }
             }
-        }
+        };
 
-        if old_profile.as_deref() == Some(new_profile.as_path()) {
-            tracing::info!("No changes, profile already up to date");
-        } else if let Err(err) = self.diff_trees(old_profile.as_deref(), new_profile.as_path()) {
-            let old_profile = old_profile
-                .clone()
-                .map(|path| path.as_str().to_owned())
-                .unwrap_or_default();
-            tracing::debug!("Failed to diff profiles {old_profile} -> {new_profile}:\n{err}");
-        }
-
-        Ok((old_profile, new_profile))
+        Ok(())
     }
 
-    fn diff_trees(&self, old: Option<&Utf8Path>, new: &Utf8Path) -> miette::Result<()> {
-        tracing::info!("Built Nix profile: {new}");
+    fn diff_trees(&self, old: Option<&Utf8Path>, new: &Utf8Path) -> miette::Result<DiffResult> {
         let old = match old {
-            None => return Ok(()),
+            None => return Ok(DiffResult::NoPreviousProfile),
             Some(old) => old,
         };
+
+        if old == new {
+            return Ok(DiffResult::NoChanges);
+        }
 
         let diff = diff_trees::Diff::new(old.as_std_path(), new.as_std_path()).into_diagnostic()?;
         // We have to display the diff to see if it's actually empty. See https://github.com/9999years/npingler/issues/68
@@ -313,14 +466,10 @@ impl App {
         );
 
         if displayed_diff.is_empty() {
-            // Sometimes, the profile path changes, but no installed paths actually
-            // change their contents.
-            tracing::info!("No changes from current profile");
+            Ok(DiffResult::NoChanges)
         } else {
-            tracing::info!("Changes from current profile:\n{}", displayed_diff);
+            Ok(DiffResult::Changes(displayed_diff))
         }
-
-        Ok(())
     }
 
     #[instrument(level = "debug", skip(self))]
@@ -492,5 +641,13 @@ impl App {
         self.ensure_registry()?;
         self.ensure_channels()?;
         Ok(())
+    }
+}
+
+fn first_to_upper(s: &str) -> String {
+    let mut c = s.chars();
+    match c.next() {
+        None => "".to_string(),
+        Some(f) => format!("{}{}", f.to_uppercase().collect::<String>(), c.as_str()),
     }
 }
